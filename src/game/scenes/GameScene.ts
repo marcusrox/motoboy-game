@@ -265,7 +265,7 @@ export class GameScene extends Scene
             0.07
         );
 
-        sidewalk.setDepth(1);
+        sidewalk.setDepth(0);
         building.setDepth(2);
         roof.setDepth(3);
         this.obstacles.add(building);

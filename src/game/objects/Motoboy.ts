@@ -5,6 +5,9 @@ const MOVING_DRAG = 140;
 const BRAKING_DRAG = 620;
 const MAX_SPEED = 430;
 const ROTATION_SPEED_THRESHOLD = 12;
+const TURN_ACCELERATION_MULTIPLIER = 1.25;
+const TURN_ALIGNMENT_THRESHOLD = 0.85;
+const VISUAL_ROTATION_SPEED = 0.16;
 
 export class Motoboy extends GameObjects.Container
 {
@@ -24,7 +27,7 @@ export class Motoboy extends GameObjects.Container
         bike.lineBetween(-26, -27, 26, -27);
 
         this.add(bike);
-        this.setSize(48, 90);
+        this.setSize(48, 90).setDepth(1);
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
@@ -40,7 +43,15 @@ export class Motoboy extends GameObjects.Container
 
         if (direction.lengthSq() > 0)
         {
-            body.setAcceleration(direction.x * ACCELERATION, direction.y * ACCELERATION);
+            const speed = body.velocity.length();
+            const alignment = speed > ROTATION_SPEED_THRESHOLD
+                ? body.velocity.dot(direction) / speed
+                : 1;
+            const acceleration = alignment < TURN_ALIGNMENT_THRESHOLD
+                ? ACCELERATION * TURN_ACCELERATION_MULTIPLIER
+                : ACCELERATION;
+
+            body.setAcceleration(direction.x * acceleration, direction.y * acceleration);
             body.setDrag(MOVING_DRAG);
         }
         else
@@ -54,7 +65,7 @@ export class Motoboy extends GameObjects.Container
             this.rotation = PhaserMath.Angle.RotateTo(
                 this.rotation,
                 Math.atan2(body.velocity.y, body.velocity.x) + Math.PI / 2,
-                0.12
+                VISUAL_ROTATION_SPEED
             );
         }
     }
