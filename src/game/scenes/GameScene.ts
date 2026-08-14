@@ -1,12 +1,25 @@
 import { GameObjects, Input, Math as PhaserMath, Physics, Scene, Types } from 'phaser';
+import { DeliveryMarker } from '../objects/DeliveryMarker';
 import { Motoboy } from '../objects/Motoboy';
-import { DeliverySystem } from '../systems/DeliverySystem';
-import { PursuitSystem } from '../systems/PursuitSystem';
+import { DeliveryPoint, DeliverySystem } from '../systems/DeliverySystem';
 import { HUD } from '../ui/HUD';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 3200;
+const RESTAURANT: DeliveryPoint = {
+    id: 'restaurant',
+    name: 'Restaurante',
+    x: 1200,
+    y: 430
+};
+const DELIVERY_DESTINATIONS: DeliveryPoint[] = [
+    { id: 'north-west', name: 'Cliente Norte', x: 460, y: 920 },
+    { id: 'north-east', name: 'Cliente Leste', x: 2070, y: 920 },
+    { id: 'central', name: 'Cliente Centro', x: 1200, y: 1920 },
+    { id: 'plaza', name: 'Cliente da Praça', x: 1700, y: 2290 },
+    { id: 'south-west', name: 'Cliente Sul', x: 460, y: 2730 }
+];
 
 interface CityBlock
 {
@@ -20,7 +33,8 @@ interface CityBlock
 export class GameScene extends Scene
 {
     private deliverySystem!: DeliverySystem;
-    private pursuitSystem!: PursuitSystem;
+    private destinationMarkers = new Map<string, DeliveryMarker>();
+    private hud!: HUD;
     private motoboy!: Motoboy;
     private obstacles!: Physics.Arcade.StaticGroup;
     private joystick!: VirtualJoystick;
@@ -41,14 +55,14 @@ export class GameScene extends Scene
         this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         this.obstacles = this.physics.add.staticGroup();
         this.createUrbanTestField();
+        this.deliverySystem = new DeliverySystem(RESTAURANT, DELIVERY_DESTINATIONS);
+        this.createDeliveryMarkers();
 
         this.motoboy = new Motoboy(this, 1200, 1500);
         this.physics.add.collider(this.motoboy, this.obstacles);
         this.cameras.main.startFollow(this.motoboy, true, 0.12, 0.12);
 
-        this.deliverySystem = new DeliverySystem();
-        this.pursuitSystem = new PursuitSystem();
-        new HUD(this, this.deliverySystem, this.pursuitSystem);
+        this.hud = new HUD(this, this.deliverySystem);
         this.joystick = new VirtualJoystick(this, 130, height - 150);
 
         this.add.text(width - 24, height - 42, 'WASD / SETAS', {
@@ -92,6 +106,63 @@ export class GameScene extends Scene
         }
 
         this.motoboy.drive(this.movement);
+        this.updateDeliveryLoop();
+    }
+
+    private createDeliveryMarkers ()
+    {
+        new DeliveryMarker(
+            this,
+            RESTAURANT.x,
+            RESTAURANT.y,
+            RESTAURANT.name,
+            0xf28c28,
+            true
+        );
+
+        DELIVERY_DESTINATIONS.forEach((destination) => {
+            const marker = new DeliveryMarker(
+                this,
+                destination.x,
+                destination.y,
+                destination.name,
+                0x43c6e8
+            );
+
+            this.destinationMarkers.set(destination.id, marker);
+        });
+    }
+
+    private updateDeliveryLoop ()
+    {
+        const currentDelivery = this.deliverySystem.getCurrentDelivery();
+
+        if (!currentDelivery)
+        {
+            const newDelivery = this.deliverySystem.tryStartDelivery(this.motoboy.x, this.motoboy.y);
+
+            if (newDelivery)
+            {
+                this.destinationMarkers.get(newDelivery.destination.id)?.setHighlighted(true);
+            }
+        }
+        else
+        {
+            const completedDelivery = this.deliverySystem.tryCompleteDelivery(
+                this.motoboy.x,
+                this.motoboy.y
+            );
+
+            if (completedDelivery)
+            {
+                this.destinationMarkers.get(completedDelivery.destination.id)?.setHighlighted(false);
+                this.hud.showSuccess(completedDelivery.reward);
+            }
+        }
+
+        this.hud.refresh(
+            this.deliverySystem.getDistanceToDestination(this.motoboy.x, this.motoboy.y)
+        );
     }
 
     private createUrbanTestField ()
