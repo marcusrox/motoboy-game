@@ -1,18 +1,28 @@
-import { Input, Math as PhaserMath, Scene, Types } from 'phaser';
+import { GameObjects, Input, Math as PhaserMath, Physics, Scene, Types } from 'phaser';
 import { Motoboy } from '../objects/Motoboy';
 import { DeliverySystem } from '../systems/DeliverySystem';
 import { PursuitSystem } from '../systems/PursuitSystem';
 import { HUD } from '../ui/HUD';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 
-const WORLD_WIDTH = 2160;
-const WORLD_HEIGHT = 3840;
+const WORLD_WIDTH = 2400;
+const WORLD_HEIGHT = 3200;
+
+interface CityBlock
+{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color?: number;
+}
 
 export class GameScene extends Scene
 {
     private deliverySystem!: DeliverySystem;
     private pursuitSystem!: PursuitSystem;
     private motoboy!: Motoboy;
+    private obstacles!: Physics.Arcade.StaticGroup;
     private joystick!: VirtualJoystick;
     private cursors!: Types.Input.Keyboard.CursorKeys;
     private wasd!: Record<'up' | 'down' | 'left' | 'right', Input.Keyboard.Key>;
@@ -29,9 +39,11 @@ export class GameScene extends Scene
 
         this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-        this.createPlaceholderCity();
+        this.obstacles = this.physics.add.staticGroup();
+        this.createUrbanTestField();
 
-        this.motoboy = new Motoboy(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+        this.motoboy = new Motoboy(this, 1200, 1500);
+        this.physics.add.collider(this.motoboy, this.obstacles);
         this.cameras.main.startFollow(this.motoboy, true, 0.12, 0.12);
 
         this.deliverySystem = new DeliverySystem();
@@ -82,35 +94,165 @@ export class GameScene extends Scene
         this.motoboy.drive(this.movement);
     }
 
-    private createPlaceholderCity ()
+    private createUrbanTestField ()
     {
         const graphics = this.add.graphics();
 
-        graphics.fillStyle(0x61735f);
+        graphics.fillStyle(0xb7b2a6);
         graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-        for (let x = 240; x < WORLD_WIDTH; x += 480)
-        {
-            graphics.fillStyle(0x30373d);
-            graphics.fillRect(x - 90, 0, 180, WORLD_HEIGHT);
-            graphics.lineStyle(5, 0xf4d35e, 0.7);
+        this.drawRoad(graphics, 380, 0, 160, WORLD_HEIGHT, false);
+        this.drawRoad(graphics, 1040, 0, 320, WORLD_HEIGHT, true);
+        this.drawRoad(graphics, 2000, 0, 140, WORLD_HEIGHT, false);
+        this.drawRoad(graphics, 0, 760, WORLD_WIDTH, 320, true);
+        this.drawRoad(graphics, 0, 1840, WORLD_WIDTH, 160, false);
+        this.drawRoad(graphics, 0, 2580, WORLD_WIDTH, 300, true);
 
-            for (let y = 20; y < WORLD_HEIGHT; y += 90)
+        const blocks: CityBlock[] = [
+            { x: 30, y: 30, width: 310, height: 690, color: 0x8e5f48 },
+            { x: 580, y: 40, width: 420, height: 670, color: 0x586f7c },
+            { x: 1400, y: 35, width: 560, height: 680, color: 0x766b55 },
+            { x: 2180, y: 35, width: 185, height: 680, color: 0x8a665c },
+            { x: 30, y: 1120, width: 310, height: 680, color: 0x596c68 },
+            { x: 580, y: 1120, width: 190, height: 680, color: 0x8a6d52 },
+            { x: 850, y: 1120, width: 150, height: 680, color: 0x586f7c },
+            { x: 1400, y: 1120, width: 560, height: 680, color: 0x806052 },
+            { x: 2180, y: 1120, width: 185, height: 680, color: 0x65756a },
+            { x: 30, y: 2040, width: 310, height: 500, color: 0x705d68 },
+            { x: 580, y: 2040, width: 420, height: 500, color: 0x5c6e78 },
+            { x: 2180, y: 2040, width: 185, height: 500, color: 0x846554 },
+            { x: 30, y: 2920, width: 310, height: 245, color: 0x596c68 },
+            { x: 580, y: 2920, width: 420, height: 245, color: 0x806052 },
+            { x: 1400, y: 2920, width: 560, height: 245, color: 0x586f7c },
+            { x: 2180, y: 2920, width: 185, height: 245, color: 0x766b55 }
+        ];
+
+        blocks.forEach((block) => this.createBuilding(block));
+        this.createAlley(graphics);
+        this.createOpenArea(graphics);
+        this.drawCrosswalks(graphics);
+    }
+
+    private drawRoad (
+        graphics: GameObjects.Graphics,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        wide: boolean
+    )
+    {
+        graphics.fillStyle(wide ? 0x30373d : 0x384047);
+        graphics.fillRect(x, y, width, height);
+        graphics.lineStyle(wide ? 6 : 4, 0xe7c85a, 0.75);
+
+        if (height > width)
+        {
+            const centerX = x + width / 2;
+
+            for (let markerY = 25; markerY < y + height; markerY += 110)
             {
-                graphics.lineBetween(x, y, x, y + 45);
+                graphics.lineBetween(centerX, markerY, centerX, markerY + 55);
             }
         }
-
-        for (let y = 320; y < WORLD_HEIGHT; y += 640)
+        else
         {
-            graphics.fillStyle(0x30373d);
-            graphics.fillRect(0, y - 90, WORLD_WIDTH, 180);
-            graphics.lineStyle(5, 0xf4d35e, 0.7);
+            const centerY = y + height / 2;
 
-            for (let x = 20; x < WORLD_WIDTH; x += 90)
+            for (let markerX = 25; markerX < x + width; markerX += 110)
             {
-                graphics.lineBetween(x, y, x + 45, y);
+                graphics.lineBetween(markerX, centerY, markerX + 55, centerY);
             }
+        }
+    }
+
+    private createBuilding ({ x, y, width, height, color = 0x6f665e }: CityBlock)
+    {
+        const sidewalk = this.add.rectangle(
+            x + width / 2,
+            y + height / 2,
+            width,
+            height,
+            0xc8c3b8
+        ).setStrokeStyle(5, 0xe2ded5);
+
+        const inset = Math.min(34, width * 0.12, height * 0.12);
+        const building = this.add.rectangle(
+            x + width / 2,
+            y + height / 2,
+            width - inset * 2,
+            height - inset * 2,
+            color
+        ).setStrokeStyle(8, 0x383532);
+
+        const roof = this.add.rectangle(
+            x + width / 2,
+            y + height / 2,
+            Math.max(24, width - inset * 2 - 30),
+            Math.max(24, height - inset * 2 - 30),
+            0xffffff,
+            0.07
+        );
+
+        sidewalk.setDepth(1);
+        building.setDepth(2);
+        roof.setDepth(3);
+        this.obstacles.add(building);
+    }
+
+    private createAlley (graphics: GameObjects.Graphics)
+    {
+        graphics.fillStyle(0x4a4d4e);
+        graphics.fillRect(770, 1120, 80, 680);
+        graphics.lineStyle(3, 0x777b79, 0.8);
+
+        for (let y = 1150; y < 1800; y += 70)
+        {
+            graphics.lineBetween(783, y, 837, y);
+        }
+    }
+
+    private createOpenArea (graphics: GameObjects.Graphics)
+    {
+        graphics.fillStyle(0x9e9a8f);
+        graphics.fillRect(1400, 2040, 560, 500);
+        graphics.lineStyle(3, 0xb8b4aa, 0.8);
+
+        for (let x = 1420; x < 1960; x += 70)
+        {
+            graphics.lineBetween(x, 2040, x, 2540);
+        }
+
+        for (let y = 2060; y < 2540; y += 70)
+        {
+            graphics.lineBetween(1400, y, 1960, y);
+        }
+
+        this.createBarrier(1460, 2120, 150, 55);
+        this.createBarrier(1810, 2120, 90, 55);
+        this.createBarrier(1540, 2435, 85, 85);
+        this.createBarrier(1835, 2400, 150, 55);
+    }
+
+    private createBarrier (x: number, y: number, width: number, height: number)
+    {
+        const barrier = this.add.rectangle(x, y, width, height, 0x466646)
+            .setStrokeStyle(7, 0x745b3d)
+            .setDepth(2);
+
+        this.obstacles.add(barrier);
+    }
+
+    private drawCrosswalks (graphics: GameObjects.Graphics)
+    {
+        graphics.fillStyle(0xe6e3d8, 0.75);
+
+        for (let x = 1060; x < 1360; x += 38)
+        {
+            graphics.fillRect(x, 785, 22, 70);
+            graphics.fillRect(x, 985, 22, 70);
+            graphics.fillRect(x, 1860, 22, 55);
+            graphics.fillRect(x, 1925, 22, 55);
         }
     }
 }
