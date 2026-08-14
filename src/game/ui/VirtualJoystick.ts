@@ -1,12 +1,14 @@
-import { GameObjects, Geom, Input, Math as PhaserMath, Scene } from 'phaser';
+import { GameObjects, Input, Math as PhaserMath, Scene } from 'phaser';
 
 const JOYSTICK_RADIUS = 82;
+const TOUCH_AREA_SIZE = 210;
 
 export class VirtualJoystick extends GameObjects.Container
 {
     readonly direction = new PhaserMath.Vector2();
 
     private knob: GameObjects.Arc;
+    private inputZone: GameObjects.Zone;
     private activePointerId: number | null = null;
 
     constructor (scene: Scene, x: number, y: number)
@@ -14,11 +16,7 @@ export class VirtualJoystick extends GameObjects.Container
         super(scene, x, y);
 
         const base = scene.add.circle(0, 0, JOYSTICK_RADIUS, 0x111820, 0.55)
-            .setStrokeStyle(4, 0xffffff, 0.5)
-            .setInteractive(
-                new Geom.Circle(JOYSTICK_RADIUS, JOYSTICK_RADIUS, JOYSTICK_RADIUS),
-                Geom.Circle.Contains
-            );
+            .setStrokeStyle(4, 0xffffff, 0.5);
 
         this.knob = scene.add.circle(0, 0, 38, 0xf4b41a, 0.85)
             .setStrokeStyle(3, 0xffffff, 0.7);
@@ -27,7 +25,12 @@ export class VirtualJoystick extends GameObjects.Container
         this.setScrollFactor(0).setDepth(200);
         scene.add.existing(this);
 
-        base.on('pointerdown', this.handlePointerDown, this);
+        this.inputZone = scene.add.zone(x, y, TOUCH_AREA_SIZE, TOUCH_AREA_SIZE)
+            .setScrollFactor(0)
+            .setDepth(201)
+            .setInteractive();
+
+        this.inputZone.on('pointerdown', this.handlePointerDown, this);
         scene.input.on('pointermove', this.handlePointerMove, this);
         scene.input.on('pointerup', this.handlePointerUp, this);
         scene.input.on('pointerupoutside', this.handlePointerUp, this);
@@ -46,7 +49,7 @@ export class VirtualJoystick extends GameObjects.Container
 
     private handlePointerMove (pointer: Input.Pointer)
     {
-        if (pointer.id === this.activePointerId && pointer.isDown)
+        if (pointer.id === this.activePointerId)
         {
             this.updateDirection(pointer);
         }
@@ -77,6 +80,7 @@ export class VirtualJoystick extends GameObjects.Container
 
     private removeInputListeners ()
     {
+        this.inputZone.off('pointerdown', this.handlePointerDown, this);
         this.scene.input.off('pointermove', this.handlePointerMove, this);
         this.scene.input.off('pointerup', this.handlePointerUp, this);
         this.scene.input.off('pointerupoutside', this.handlePointerUp, this);
