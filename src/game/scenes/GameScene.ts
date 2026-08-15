@@ -2,6 +2,9 @@ import { GameObjects, Input, Math as PhaserMath, Physics, Scene, Types } from 'p
 import { DeliveryMarker } from '../objects/DeliveryMarker';
 import { Motoboy } from '../objects/Motoboy';
 import { DeliveryPoint, DeliverySystem } from '../systems/DeliverySystem';
+import { PursuitSystem, SpawnPoint } from '../systems/PursuitSystem';
+import { TrafficSystem } from '../systems/TrafficSystem';
+import { GameOverOverlay } from '../ui/GameOverOverlay';
 import { HUD } from '../ui/HUD';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 
@@ -20,6 +23,20 @@ const DELIVERY_DESTINATIONS: DeliveryPoint[] = [
     { id: 'plaza', name: 'Cliente da Praça', x: 1700, y: 2290 },
     { id: 'south-west', name: 'Cliente Sul', x: 460, y: 2730 }
 ];
+const PURSUIT_SPAWN_POINTS: SpawnPoint[] = [
+    { x: 1200, y: 90 },
+    { x: 1200, y: 3110 },
+    { x: 460, y: 90 },
+    { x: 460, y: 3110 },
+    { x: 2070, y: 90 },
+    { x: 2070, y: 3110 },
+    { x: 90, y: 920 },
+    { x: 2310, y: 920 },
+    { x: 90, y: 1920 },
+    { x: 2310, y: 1920 },
+    { x: 90, y: 2730 },
+    { x: 2310, y: 2730 }
+];
 
 interface CityBlock
 {
@@ -33,6 +50,8 @@ interface CityBlock
 export class GameScene extends Scene
 {
     private deliverySystem!: DeliverySystem;
+    private pursuitSystem!: PursuitSystem;
+    private trafficSystem!: TrafficSystem;
     private destinationMarkers = new Map<string, DeliveryMarker>();
     private hud!: HUD;
     private motoboy!: Motoboy;
@@ -41,6 +60,7 @@ export class GameScene extends Scene
     private cursors!: Types.Input.Keyboard.CursorKeys;
     private wasd!: Record<'up' | 'down' | 'left' | 'right', Input.Keyboard.Key>;
     private movement = new PhaserMath.Vector2();
+    private gameOver = false;
 
     constructor ()
     {
@@ -63,6 +83,29 @@ export class GameScene extends Scene
         this.cameras.main.startFollow(this.motoboy, true, 0.12, 0.12);
 
         this.hud = new HUD(this, this.deliverySystem);
+        this.trafficSystem = new TrafficSystem(
+            this,
+            this.motoboy,
+            {
+                onPlayerCollision: (moneyPenalty) => {
+                    const appliedPenalty = this.deliverySystem.applyMoneyPenalty(moneyPenalty);
+                    this.hud.showTrafficCollision(appliedPenalty);
+                }
+            }
+        );
+        this.pursuitSystem = new PursuitSystem(
+            this,
+            this.motoboy,
+            this.obstacles,
+            this.trafficSystem.getVehicleGroup(),
+            this.cameras.main,
+            PURSUIT_SPAWN_POINTS,
+            {
+                onStarted: () => this.hud.refreshPursuit(this.pursuitSystem.getStatus()),
+                onEscaped: () => this.hud.showEscaped(),
+                onCaught: () => this.handleGameOver()
+            }
+        );
         this.joystick = new VirtualJoystick(this, 130, height - 150);
 
         this.add.text(width - 24, height - 42, 'WASD / SETAS', {
@@ -87,8 +130,13 @@ export class GameScene extends Scene
         };
     }
 
-    update ()
+    update (_time: number, delta: number)
     {
+        if (this.gameOver)
+        {
+            return;
+        }
+
         const touch = this.joystick.direction;
         const left = this.cursors.left.isDown || this.wasd.left.isDown;
         const right = this.cursors.right.isDown || this.wasd.right.isDown;
@@ -106,7 +154,10 @@ export class GameScene extends Scene
         }
 
         this.motoboy.drive(this.movement);
+        this.trafficSystem.update(delta);
         this.updateDeliveryLoop();
+        this.pursuitSystem.update(delta);
+        this.hud.refreshPursuit(this.pursuitSystem.getStatus());
     }
 
     private createDeliveryMarkers ()
@@ -144,6 +195,9 @@ export class GameScene extends Scene
             if (newDelivery)
             {
                 this.destinationMarkers.get(newDelivery.destination.id)?.setHighlighted(true);
+                this.pursuitSystem.considerStarting(
+                    this.deliverySystem.getCompletedDeliveries()
+                );
             }
         }
         else
@@ -162,6 +216,28 @@ export class GameScene extends Scene
 
         this.hud.refresh(
             this.deliverySystem.getDistanceToDestination(this.motoboy.x, this.motoboy.y)
+        );
+    }
+
+    private handleGameOver ()
+    {
+        if (this.gameOver)
+        {
+            return;
+        }
+
+        this.gameOver = true;
+        this.motoboy.drive(new PhaserMath.Vector2());
+        this.physics.pause();
+        this.joystick.setEnabled(false);
+
+        new GameOverOverlay(
+            this,
+            {
+                completedDeliveries: this.deliverySystem.getCompletedDeliveries(),
+                money: this.deliverySystem.getMoney()
+            },
+            () => this.scene.restart()
         );
     }
 

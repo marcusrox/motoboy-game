@@ -1,5 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
+import { DEBUG_PURSUIT } from '../config/pursuitConfig';
 import { DeliverySystem } from '../systems/DeliverySystem';
+import { PursuitStatus } from '../systems/PursuitSystem';
 
 export class HUD extends GameObjects.Container
 {
@@ -7,7 +9,10 @@ export class HUD extends GameObjects.Container
     private statusText: GameObjects.Text;
     private distanceText: GameObjects.Text;
     private valueText: GameObjects.Text;
-    private successText: GameObjects.Text;
+    private notificationText: GameObjects.Text;
+    private dangerBorder: GameObjects.Rectangle;
+    private dangerText: GameObjects.Text;
+    private debugText: GameObjects.Text;
 
     constructor (scene: Scene, private deliverySystem: DeliverySystem)
     {
@@ -34,13 +39,31 @@ export class HUD extends GameObjects.Container
             fontFamily: 'Arial Black',
             fontSize: '19px'
         }).setOrigin(1, 0);
-        this.successText = scene.add.text(360, 220, '', {
+        this.notificationText = scene.add.text(360, 270, '', {
             align: 'center',
             backgroundColor: '#246b3d',
             color: '#ffffff',
             fontFamily: 'Arial Black',
             fontSize: '28px',
             padding: { x: 22, y: 14 }
+        }).setOrigin(0.5).setVisible(false);
+        this.dangerBorder = scene.add.rectangle(360, 640, 700, 1260)
+            .setStrokeStyle(10, 0xff304f, 0.8)
+            .setVisible(false);
+        this.dangerText = scene.add.text(360, 205, '! PERSEGUIÇÃO !', {
+            backgroundColor: '#a1122a',
+            color: '#ffffff',
+            fontFamily: 'Arial Black',
+            fontSize: '28px',
+            padding: { x: 18, y: 10 }
+        }).setOrigin(0.5).setVisible(false);
+        this.debugText = scene.add.text(360, 330, '', {
+            align: 'center',
+            backgroundColor: '#000000',
+            color: '#ffcf5c',
+            fontFamily: 'monospace',
+            fontSize: '17px',
+            padding: { x: 10, y: 8 }
         }).setOrigin(0.5).setVisible(false);
 
         this.add([
@@ -49,7 +72,10 @@ export class HUD extends GameObjects.Container
             this.statusText,
             this.distanceText,
             this.valueText,
-            this.successText
+            this.notificationText,
+            this.dangerBorder,
+            this.dangerText,
+            this.debugText
         ]);
         this.setScrollFactor(0).setDepth(100);
         scene.add.existing(this);
@@ -78,11 +104,55 @@ export class HUD extends GameObjects.Container
 
     showSuccess (reward: number)
     {
-        this.successText
-            .setText(`ENTREGA CONCLUÍDA!\n+ ${this.formatMoney(reward)}`)
+        this.showNotification(`ENTREGA CONCLUÍDA!\n+ ${this.formatMoney(reward)}`, '#246b3d');
+    }
+
+    showEscaped ()
+    {
+        this.showNotification('VOCÊ ESCAPOU!', '#246b3d');
+    }
+
+    showTrafficCollision (moneyPenalty: number)
+    {
+        const penaltyText = moneyPenalty > 0
+            ? `\n- ${this.formatMoney(moneyPenalty)}`
+            : '';
+
+        this.showNotification(`COLISÃO!${penaltyText}`, '#9b1c31');
+    }
+
+    refreshPursuit (status: PursuitStatus)
+    {
+        const active = status.state === 'active';
+        this.dangerBorder.setVisible(active);
+        this.dangerText.setVisible(active);
+
+        if (!DEBUG_PURSUIT)
+        {
+            this.debugText.setVisible(false);
+            return;
+        }
+
+        const distance = status.distance === null ? '--' : `${Math.round(status.distance)} px`;
+        const escapeSeconds = (status.escapeTimeRemainingMs / 1000).toFixed(1);
+
+        this.debugText
+            .setText([
+                `Pursuit: ${status.state}`,
+                `Distância: ${distance}`,
+                `Tempo para escapar: ${escapeSeconds}s`
+            ])
+            .setVisible(true);
+    }
+
+    private showNotification (message: string, backgroundColor: string)
+    {
+        this.notificationText
+            .setText(message)
+            .setBackgroundColor(backgroundColor)
             .setVisible(true);
 
-        this.scene.time.delayedCall(2200, () => this.successText.setVisible(false));
+        this.scene.time.delayedCall(2200, () => this.notificationText.setVisible(false));
     }
 
     private formatMoney (value: number)

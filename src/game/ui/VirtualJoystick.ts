@@ -9,11 +9,13 @@ export class VirtualJoystick extends GameObjects.Container
 
     private knob: GameObjects.Arc;
     private inputZone: GameObjects.Zone;
+    private inputPlugin: Input.InputPlugin;
     private activePointerId: number | null = null;
 
     constructor (scene: Scene, x: number, y: number)
     {
         super(scene, x, y);
+        this.inputPlugin = scene.input;
 
         const base = scene.add.circle(0, 0, JOYSTICK_RADIUS, 0x111820, 0.55)
             .setStrokeStyle(4, 0xffffff, 0.5);
@@ -31,11 +33,28 @@ export class VirtualJoystick extends GameObjects.Container
             .setInteractive();
 
         this.inputZone.on('pointerdown', this.handlePointerDown, this);
-        scene.input.on('pointermove', this.handlePointerMove, this);
-        scene.input.on('pointerup', this.handlePointerUp, this);
-        scene.input.on('pointerupoutside', this.handlePointerUp, this);
+        this.inputPlugin.on('pointermove', this.handlePointerMove, this);
+        this.inputPlugin.on('pointerup', this.handlePointerUp, this);
+        this.inputPlugin.on('pointerupoutside', this.handlePointerUp, this);
 
         scene.events.once('shutdown', this.removeInputListeners, this);
+    }
+
+    setEnabled (enabled: boolean)
+    {
+        this.setVisible(enabled);
+
+        if (enabled)
+        {
+            this.inputZone.setInteractive();
+        }
+        else
+        {
+            this.inputZone.disableInteractive();
+            this.activePointerId = null;
+            this.direction.set(0, 0);
+            this.knob.setPosition(0, 0);
+        }
     }
 
     private handlePointerDown (pointer: Input.Pointer)
@@ -81,8 +100,8 @@ export class VirtualJoystick extends GameObjects.Container
     private removeInputListeners ()
     {
         this.inputZone.off('pointerdown', this.handlePointerDown, this);
-        this.scene.input.off('pointermove', this.handlePointerMove, this);
-        this.scene.input.off('pointerup', this.handlePointerUp, this);
-        this.scene.input.off('pointerupoutside', this.handlePointerUp, this);
+        this.inputPlugin.off('pointermove', this.handlePointerMove, this);
+        this.inputPlugin.off('pointerup', this.handlePointerUp, this);
+        this.inputPlugin.off('pointerupoutside', this.handlePointerUp, this);
     }
 }

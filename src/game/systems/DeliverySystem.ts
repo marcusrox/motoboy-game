@@ -20,6 +20,7 @@ export class DeliverySystem
 {
     private currentDelivery: Delivery | null = null;
     private money = 0;
+    private completedDeliveries = 0;
 
     constructor (
         readonly restaurant: DeliveryPoint,
@@ -34,6 +35,19 @@ export class DeliverySystem
     getMoney ()
     {
         return this.money;
+    }
+
+    getCompletedDeliveries ()
+    {
+        return this.completedDeliveries;
+    }
+
+    applyMoneyPenalty (amount: number)
+    {
+        const appliedPenalty = Math.min(this.money, Math.max(0, amount));
+        this.money -= appliedPenalty;
+
+        return appliedPenalty;
     }
 
     getDistanceToDestination (x: number, y: number)
@@ -81,6 +95,7 @@ export class DeliverySystem
 
         const completedDelivery = this.currentDelivery;
         this.money += completedDelivery.reward;
+        this.completedDeliveries += 1;
         this.currentDelivery = null;
 
         return completedDelivery;
