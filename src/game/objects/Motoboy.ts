@@ -70,6 +70,13 @@ export class Motoboy extends GameObjects.Container
         }
     }
 
+    getSpeedRatio ()
+    {
+        const body = this.body as Physics.Arcade.Body;
+
+        return PhaserMath.Clamp(body.velocity.length() / MAX_SPEED, 0, 1);
+    }
+
     drive (direction: PhaserMath.Vector2)
     {
         const body = this.body as Physics.Arcade.Body;

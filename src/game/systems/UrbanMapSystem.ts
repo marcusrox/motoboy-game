@@ -32,7 +32,7 @@ interface RoadMarkingStyle
 {
     asphaltColor: number;
     lineColor: number;
-    lineCenterOffset: number;
+    crossSectionSize: number;
     lineWidth: number;
     textureLength: number;
     markedRanges: Array<[number, number]>;
@@ -41,7 +41,7 @@ interface RoadMarkingStyle
 const WIDE_ROAD_STYLE: RoadMarkingStyle = {
     asphaltColor: 0x404346,
     lineColor: 0xd7a437,
-    lineCenterOffset: 159.5,
+    crossSectionSize: 320,
     lineWidth: 8,
     textureLength: 320,
     markedRanges: [
@@ -57,7 +57,7 @@ const WIDE_ROAD_STYLE: RoadMarkingStyle = {
 const NARROW_ROAD_STYLE: RoadMarkingStyle = {
     asphaltColor: 0x3e4043,
     lineColor: 0xe8a607,
-    lineCenterOffset: 79.5,
+    crossSectionSize: 160,
     lineWidth: 2,
     textureLength: 320,
     markedRanges: [
@@ -121,6 +121,9 @@ export class UrbanMapSystem
         if (this.scene.textures.exists(texture))
         {
             const vertical = road.height > road.width;
+            const crossSection = vertical ? road.width : road.height;
+            const textureCrossSection = this.roadMarkingStyle(road).crossSectionSize;
+            const centeredCropOffset = Math.max(0, (textureCrossSection - crossSection) / 2);
 
             this.scene.add.tileSprite(
                 road.x + road.width / 2,
@@ -128,7 +131,10 @@ export class UrbanMapSystem
                 vertical ? road.width : road.height,
                 vertical ? road.height : road.width,
                 texture
-            ).setRotation(vertical ? 0 : Math.PI / 2).setDepth(0);
+            )
+                .setTilePosition(centeredCropOffset, 0)
+                .setRotation(vertical ? 0 : Math.PI / 2)
+                .setDepth(0);
             return;
         }
 
@@ -344,7 +350,7 @@ export class UrbanMapSystem
         this.drawDashedGuide(
             graphics,
             vertical,
-            vertical.x + this.roadMarkingStyle(vertical).lineCenterOffset,
+            vertical.x + vertical.width / 2,
             top,
             bottom,
             true
@@ -352,7 +358,7 @@ export class UrbanMapSystem
         this.drawDashedGuide(
             graphics,
             horizontal,
-            horizontal.y + this.roadMarkingStyle(horizontal).lineCenterOffset,
+            horizontal.y + horizontal.height / 2,
             left,
             right,
             false

@@ -1,5 +1,7 @@
 import { Scene } from 'phaser';
 import { GAME_VERSION } from '../config/gameVersion';
+import { AudioManager } from '../systems/AudioManager';
+import { AudioSettingsPanel } from '../ui/AudioSettingsPanel';
 import { MobileScreenUI } from '../ui/MobileScreenUI';
 
 export class MainMenuScene extends Scene
@@ -12,6 +14,9 @@ export class MainMenuScene extends Scene
     create ()
     {
         const { centerX, centerY, height, width } = this.cameras.main;
+        const audio = new AudioManager(this);
+
+        audio.startMenuMusic();
         const background = this.add.graphics();
         background.fillGradientStyle(0x17212b, 0x17212b, 0x314936, 0x314936);
         background.fillRect(0, 0, width, height);
@@ -52,7 +57,12 @@ export class MainMenuScene extends Scene
             padding: { x: 30, y: 20 }
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        startButton.once('pointerdown', () => this.scene.start('GameScene'));
+        startButton.once('pointerdown', () => {
+            audio.playUiClick();
+            this.scene.start('GameScene');
+        });
+
+        new AudioSettingsPanel(this, audio, centerX, centerY + 260);
 
         this.add.text(width - 24, height - 22, `Versão ${GAME_VERSION}`, {
             color: '#c7d0d9',

@@ -54,9 +54,11 @@ O conjunto 0.8 está completo: todos os 21 arquivos listados abaixo estão produ
 | `ui/pursuit-warning.png` | 64×64 | Indicador visual de perseguição |
 | `effects/collision.png` | 768×128, 6 frames de 128×128 | Efeito breve de impacto |
 
-## Áudio futuro
+## Áudio
 
-O diretório `audio/` já está reservado, mas nenhum som é carregado na versão 0.8. Quando o sistema de áudio for implementado, prefira formatos WebM/Opus ou OGG com alternativa compatível para Safari quando necessário.
+A infraestrutura de áudio está disponível desde a versão 0.9. Os arquivos
+continuam desabilitados até serem produzidos. Consulte `audio/README.md` para a
+lista exata, formatos, durações e instruções de ativação.
 
 ## Arquivos antigos
 

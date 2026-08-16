@@ -1,4 +1,4 @@
-import { GameObjects, Scene } from 'phaser';
+import { GameObjects, Scene, Time } from 'phaser';
 import { DEBUG_PURSUIT } from '../config/pursuitConfig';
 import { CompletedDelivery, DeliverySystem } from '../systems/DeliverySystem';
 import { GameStatsSystem } from '../systems/GameStatsSystem';
@@ -13,9 +13,13 @@ export class HUD extends GameObjects.Container
     private distanceText: GameObjects.Text;
     private valueText: GameObjects.Text;
     private notificationText: GameObjects.Text;
+    private deliveryPulse: GameObjects.Arc;
+    private collisionFlash: GameObjects.Rectangle;
     private dangerBorder: GameObjects.Rectangle;
     private dangerText: GameObjects.Text;
     private debugText: GameObjects.Text;
+    private pursuitActive = false;
+    private notificationHideEvent?: Time.TimerEvent;
 
     constructor (
         scene: Scene,
@@ -58,6 +62,12 @@ export class HUD extends GameObjects.Container
             fontFamily: 'Arial',
             fontSize: '16px'
         });
+        this.deliveryPulse = scene.add.circle(360, 245, 82, 0x8ee3a2, 0)
+            .setStrokeStyle(12, 0x8ee3a2, 0.85)
+            .setVisible(false);
+        this.collisionFlash = scene.add.rectangle(0, 0, 720, 1280, 0xff304f, 0)
+            .setOrigin(0)
+            .setVisible(false);
         this.notificationText = scene.add.text(360, 245, '', {
             align: 'center',
             backgroundColor: '#246b3d',
@@ -93,6 +103,8 @@ export class HUD extends GameObjects.Container
             this.distanceText,
             this.valueText,
             this.statsText,
+            this.deliveryPulse,
+            this.collisionFlash,
             this.notificationText,
             this.dangerBorder,
             this.dangerText,
@@ -138,6 +150,7 @@ export class HUD extends GameObjects.Container
             `ENTREGA CONCLUÍDA!\n+ ${this.formatMoney(delivery.totalReward)}${bonusLine}`,
             '#246b3d'
         );
+        this.animateDeliveryPulse();
     }
 
     showEscaped ()
@@ -152,6 +165,7 @@ export class HUD extends GameObjects.Container
             : '';
 
         this.showNotification(`COLISÃO!${penaltyText}`, '#9b1c31');
+        this.animateCollisionFlash();
     }
 
     refreshPursuit (status: PursuitStatus)
@@ -159,6 +173,31 @@ export class HUD extends GameObjects.Container
         const active = status.state === 'active';
         this.dangerBorder.setVisible(active);
         this.dangerText.setVisible(active);
+
+        if (active !== this.pursuitActive)
+        {
+            this.pursuitActive = active;
+            this.scene.tweens.killTweensOf([this.dangerBorder, this.dangerText]);
+
+            if (active)
+            {
+                this.dangerBorder.setAlpha(0.42);
+                this.dangerText.setAlpha(0.72);
+                this.scene.tweens.add({
+                    targets: [this.dangerBorder, this.dangerText],
+                    alpha: 1,
+                    duration: 420,
+                    ease: 'Sine.InOut',
+                    yoyo: true,
+                    repeat: -1
+                });
+            }
+            else
+            {
+                this.dangerBorder.setAlpha(1);
+                this.dangerText.setAlpha(1);
+            }
+        }
 
         if (!DEBUG_PURSUIT)
         {
@@ -180,12 +219,60 @@ export class HUD extends GameObjects.Container
 
     private showNotification (message: string, backgroundColor: string)
     {
+        this.notificationHideEvent?.remove(false);
+        this.notificationHideEvent = undefined;
+        this.scene.tweens.killTweensOf(this.notificationText);
         this.notificationText
             .setText(message)
             .setBackgroundColor(backgroundColor)
+            .setAlpha(0)
+            .setScale(0.84)
             .setVisible(true);
 
-        this.scene.time.delayedCall(2200, () => this.notificationText.setVisible(false));
+        this.scene.tweens.add({
+            targets: this.notificationText,
+            alpha: 1,
+            scale: 1,
+            duration: 190,
+            ease: 'Back.Out',
+            onComplete: () => {
+                this.notificationHideEvent = this.scene.time.delayedCall(1850, () => {
+                    this.scene.tweens.add({
+                        targets: this.notificationText,
+                        alpha: 0,
+                        duration: 170,
+                        onComplete: () => this.notificationText.setVisible(false)
+                    });
+                });
+            }
+        });
+    }
+
+    private animateDeliveryPulse ()
+    {
+        this.scene.tweens.killTweensOf(this.deliveryPulse);
+        this.deliveryPulse.setVisible(true).setAlpha(0.75).setScale(0.45);
+        this.scene.tweens.add({
+            targets: this.deliveryPulse,
+            alpha: 0,
+            scale: 1.75,
+            duration: 520,
+            ease: 'Cubic.Out',
+            onComplete: () => this.deliveryPulse.setVisible(false)
+        });
+    }
+
+    private animateCollisionFlash ()
+    {
+        this.scene.tweens.killTweensOf(this.collisionFlash);
+        this.collisionFlash.setVisible(true).setAlpha(0.18);
+        this.scene.tweens.add({
+            targets: this.collisionFlash,
+            alpha: 0,
+            duration: 180,
+            ease: 'Quad.Out',
+            onComplete: () => this.collisionFlash.setVisible(false)
+        });
     }
 
     private formatMoney (value: number)

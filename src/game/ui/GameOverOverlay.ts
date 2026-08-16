@@ -15,7 +15,12 @@ export class GameOverOverlay
 {
     private restarting = false;
 
-    constructor (scene: Scene, stats: GameOverStats, onRestart: () => void)
+    constructor (
+        scene: Scene,
+        stats: GameOverStats,
+        onRestart: () => void,
+        onUiClick?: () => void
+    )
     {
         scene.add.rectangle(0, 0, 720, 1280, 0x090c10, 0.9)
             .setOrigin(0)
@@ -69,6 +74,7 @@ export class GameOverOverlay
             }
 
             this.restarting = true;
+            onUiClick?.();
             restartButton.disableInteractive();
             scene.input.keyboard?.off('keydown-ENTER', restart);
             scene.input.keyboard?.off('keydown-SPACE', restart);

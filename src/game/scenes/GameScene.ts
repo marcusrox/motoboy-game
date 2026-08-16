@@ -1,8 +1,10 @@
 import { Input, Math as PhaserMath, Physics, Scene, Types } from 'phaser';
+import { AUDIO_KEYS } from '../config/audioManifest';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/cityMapConfig';
 import { DeliveryMarker } from '../objects/DeliveryMarker';
 import { Motoboy } from '../objects/Motoboy';
 import { DeliveryPoint, DeliverySystem } from '../systems/DeliverySystem';
+import { AudioManager } from '../systems/AudioManager';
 import { GameStatsSystem } from '../systems/GameStatsSystem';
 import { ProgressPersistence } from '../systems/ProgressPersistence';
 import { PursuitSystem, SpawnPoint } from '../systems/PursuitSystem';
@@ -40,10 +42,12 @@ const PURSUIT_SPAWN_POINTS: SpawnPoint[] = [
     { x: 90, y: 2730 },
     { x: 2310, y: 2730 }
 ];
+const ENVIRONMENT_COLLISION_FEEDBACK_COOLDOWN_MS = 650;
 
 export class GameScene extends Scene
 {
     private deliverySystem!: DeliverySystem;
+    private audio!: AudioManager;
     private statsSystem!: GameStatsSystem;
     private persistence = new ProgressPersistence();
     private pursuitSystem!: PursuitSystem;
@@ -58,6 +62,7 @@ export class GameScene extends Scene
     private wasd?: Record<'up' | 'down' | 'left' | 'right', Input.Keyboard.Key>;
     private movement = new PhaserMath.Vector2();
     private gameOver = false;
+    private lastEnvironmentCollisionFeedbackAt = -Infinity;
 
     constructor ()
     {
@@ -69,6 +74,7 @@ export class GameScene extends Scene
         const { height, width } = this.cameras.main;
 
         this.gameOver = false;
+        this.lastEnvironmentCollisionFeedbackAt = -Infinity;
         this.movement.set(0, 0);
         this.destinationMarkers.clear();
 
@@ -81,7 +87,15 @@ export class GameScene extends Scene
 
         this.motoboy = new Motoboy(this, 1200, 1500);
         this.statsSystem = new GameStatsSystem(this.motoboy.x, this.motoboy.y);
-        this.physics.add.collider(this.motoboy, this.obstacles);
+        this.audio = new AudioManager(this);
+        this.audio.startGameplayMusic();
+        this.physics.add.collider(
+            this.motoboy,
+            this.obstacles,
+            this.handleEnvironmentCollision,
+            undefined,
+            this
+        );
         this.cameras.main.startFollow(this.motoboy, true, 0.12, 0.12);
 
         this.hud = new HUD(this, this.deliverySystem, this.statsSystem);
@@ -92,6 +106,8 @@ export class GameScene extends Scene
                 onPlayerCollision: (moneyPenalty) => {
                     const appliedPenalty = this.deliverySystem.applyMoneyPenalty(moneyPenalty);
                     this.statsSystem.recordTrafficCollision();
+                    this.audio.playEffect(AUDIO_KEYS.collision);
+                    this.cameras.main.shake(120, 0.006);
                     this.hud.showTrafficCollision(appliedPenalty);
                 }
             }
@@ -106,10 +122,12 @@ export class GameScene extends Scene
             {
                 onStarted: () => {
                     this.statsSystem.recordPursuitStarted();
+                    this.audio.setPursuitActive(true);
                     this.hud.refreshPursuit(this.pursuitSystem.getStatus());
                 },
                 onEscaped: () => {
                     this.statsSystem.recordPursuitEscaped();
+                    this.audio.setPursuitActive(false);
                     this.hud.showEscaped();
                 },
                 onCaught: () => this.handleGameOver()
@@ -174,6 +192,7 @@ export class GameScene extends Scene
         }
 
         this.motoboy.drive(this.movement);
+        this.audio.updateMotor(this.motoboy.getSpeedRatio(), this.movement.lengthSq() > 0);
         this.trafficSystem.update(delta);
         this.statsSystem.update(delta, this.motoboy.x, this.motoboy.y);
         this.updateDeliveryLoop();
@@ -186,6 +205,22 @@ export class GameScene extends Scene
         this.joystick.cancelInput();
         this.movement.set(0, 0);
         this.motoboy.drive(this.movement);
+    }
+
+    private handleEnvironmentCollision ()
+    {
+        const now = this.time.now;
+
+        if (now - this.lastEnvironmentCollisionFeedbackAt < ENVIRONMENT_COLLISION_FEEDBACK_COOLDOWN_MS)
+        {
+            return;
+        }
+
+        this.lastEnvironmentCollisionFeedbackAt = now;
+        this.audio.playEffect(AUDIO_KEYS.collision, 0.85);
+        this.cameras.main.shake(100, 0.0045);
+        this.motoboy.showCollisionVisual();
+        this.hud.showTrafficCollision(0);
     }
 
     private createDeliveryMarkers ()
@@ -228,6 +263,7 @@ export class GameScene extends Scene
 
             if (newDelivery)
             {
+                this.audio.playEffect(AUDIO_KEYS.pickup);
                 this.restaurantMarker.showPickupAttention();
                 this.motoboy.setCarryingDelivery(true);
                 this.destinationMarkers.get(newDelivery.destination.id)?.setHighlighted(true);
@@ -251,6 +287,8 @@ export class GameScene extends Scene
                 this.motoboy.setCarryingDelivery(false);
                 this.destinationMarkers.get(completedDelivery.destination.id)?.setHighlighted(false);
                 this.statsSystem.recordDelivery(completedDelivery);
+                this.audio.playEffect(AUDIO_KEYS.deliveryComplete);
+                this.time.delayedCall(220, () => this.audio.playEffect(AUDIO_KEYS.money, 0.8));
                 this.hud.showSuccess(completedDelivery);
             }
         }
@@ -268,6 +306,7 @@ export class GameScene extends Scene
         }
 
         this.gameOver = true;
+        this.audio.handleGameOver();
         this.motoboy.drive(new PhaserMath.Vector2());
         this.physics.pause();
         this.joystick.setEnabled(false);
@@ -286,7 +325,8 @@ export class GameScene extends Scene
                 pursuitsEscaped: stats.pursuitsEscaped,
                 newHighScore: recordUpdate.newHighScore
             },
-            () => this.scene.restart()
+            () => this.scene.restart(),
+            () => this.audio.playUiClick()
         );
     }
 

@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { preloadAudioAssets } from '../config/audioManifest';
 import { createGameAnimations, preloadGameAssets } from '../config/assetManifest';
 
 export class BootScene extends Scene
@@ -16,6 +17,7 @@ export class BootScene extends Scene
             );
         });
         preloadGameAssets(this);
+        preloadAudioAssets(this);
     }
 
     create ()

@@ -10,7 +10,7 @@ O projeto é mobile-first, pensado principalmente para smartphones Android e iPh
 
 O jogo está em desenvolvimento. A versão atual contém:
 
-**Versão atual: 0.8**
+**Versão atual: 0.9**
 
 - cidade top-down com ruas, prédios, calçadas, cruzamentos, beco e área aberta;
 - motoboy com aceleração gradual, frenagem, inércia e rotação;
@@ -22,7 +22,9 @@ O jogo está em desenvolvimento. A versão atual contém:
 - trânsito simples seguindo rotas e faixas;
 - sistema de perseguição e condição de Game Over;
 - dinheiro, pontuação, sequência de entregas e estatísticas da partida;
-- recordes locais persistidos no navegador.
+- recordes locais persistidos no navegador;
+- infraestrutura de áudio com volumes de música e efeitos, mute e preferências persistentes;
+- feedback visual discreto para entregas, colisões e perseguições.
 
 Os elementos visuais ainda são provisórios e produzidos com formas geométricas do Phaser, sem assets externos.
 
@@ -113,10 +115,10 @@ src/
 ├── main.ts                  # Inicialização da aplicação
 └── game/
     ├── main.ts              # Configuração do Phaser e resolução lógica
-    ├── config/              # Parâmetros de progressão, perseguição e trânsito
+    ├── config/              # Parâmetros, versão e manifestos de assets
     ├── objects/             # Motoboy, perseguidor, carros e marcadores
     ├── scenes/              # BootScene, MainMenuScene e GameScene
-    ├── systems/             # Entregas, trânsito, perseguição e estatísticas
+    ├── systems/             # Entregas, trânsito, perseguição, áudio e estatísticas
     └── ui/                  # HUD, joystick virtual e Game Over
 ```
 
@@ -142,6 +144,7 @@ Parâmetros de balanceamento ficam em:
 - `src/game/config/pursuitConfig.ts`: chance, atraso, velocidade e fuga da perseguição;
 - `src/game/config/trafficConfig.ts`: quantidade, velocidade, rotas e colisões do trânsito.
 - `src/game/config/gameVersion.ts`: versão exibida na tela inicial.
+- `src/game/config/audioManifest.ts`: chaves e caminhos dos arquivos de áudio.
 
 ## Compatibilidade
 
