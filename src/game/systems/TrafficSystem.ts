@@ -1,5 +1,6 @@
 import { GameObjects, Math as PhaserMath, Physics, Scene } from 'phaser';
 import { ASSET_KEYS } from '../config/assetManifest';
+import { ROAD_SEGMENTS } from '../config/cityMapConfig';
 import {
     DEBUG_TRAFFIC,
     PLAYER_TRAFFIC_COLLIDER_LENGTH,
@@ -7,6 +8,8 @@ import {
     TRAFFIC_AVOIDANCE_MARGIN,
     TRAFFIC_FOLLOW_DISTANCE,
     TRAFFIC_INTERSECTION_LOOKAHEAD_MS,
+    TRAFFIC_INTERSECTION_MARGIN,
+    TRAFFIC_INTERSECTION_RESERVATION_TIMEOUT_MS,
     TRAFFIC_MIN_FOLLOW_GAP,
     TRAFFIC_COLLISION_COOLDOWN_MS,
     TRAFFIC_COLLISION_KNOCKBACK,
@@ -42,10 +45,20 @@ interface OrientedRectangle
     rotation: number;
 }
 
+interface IntersectionReservation
+{
+    id: string;
+    zone: OrientedRectangle;
+    owner: TrafficCar | null;
+    ownerElapsedMs: number;
+}
+
 export class TrafficSystem
 {
     private vehicleGroup: Physics.Arcade.Group;
     private cars: TrafficCar[] = [];
+    private intersections: IntersectionReservation[] = [];
+    private intersectionWaitMs = new Map<TrafficCar, number>();
     private lastCollisionByCar = new WeakMap<TrafficCar, number>();
     private debugAvoidanceGraphics?: GameObjects.Graphics;
 
@@ -61,6 +74,7 @@ export class TrafficSystem
         });
 
         this.createVehicles();
+        this.intersections = this.createIntersectionReservations();
         scene.physics.add.collider(
             player,
             this.vehicleGroup,
@@ -90,13 +104,16 @@ export class TrafficSystem
         {
             for (let secondIndex = firstIndex + 1; secondIndex < this.cars.length; secondIndex += 1)
             {
-                this.resolveVehiclePair(
+                this.resolveFollowingPair(
                     this.cars[firstIndex],
                     this.cars[secondIndex],
                     speedLimits
                 );
             }
         }
+
+
+        this.processIntersectionReservations(delta, speedLimits);
 
         for (const car of this.cars)
         {
@@ -152,7 +169,7 @@ export class TrafficSystem
         }
     }
 
-    private resolveVehiclePair (
+    private resolveFollowingPair (
         first: TrafficCar,
         second: TrafficCar,
         speedLimits: Map<TrafficCar, number>
@@ -173,42 +190,263 @@ export class TrafficSystem
             && lateralDistance <= (firstState.width + secondState.width) / 2
                 + TRAFFIC_AVOIDANCE_MARGIN;
 
-        if (sameLane)
+        if (!sameLane)
         {
-            const follower = longitudinalDistance >= 0 ? first : second;
-            const followerState = longitudinalDistance >= 0 ? firstState : secondState;
-            const leaderState = longitudinalDistance >= 0 ? secondState : firstState;
-            const centerDistance = Math.abs(longitudinalDistance);
-            const gap = centerDistance - (followerState.length + leaderState.length) / 2;
-            const progress = PhaserMath.Clamp(
-                (gap - TRAFFIC_MIN_FOLLOW_GAP)
-                    / (TRAFFIC_FOLLOW_DISTANCE - TRAFFIC_MIN_FOLLOW_GAP),
-                0,
-                1
+            return;
+        }
+
+        const follower = longitudinalDistance >= 0 ? first : second;
+        const followerState = longitudinalDistance >= 0 ? firstState : secondState;
+        const leaderState = longitudinalDistance >= 0 ? secondState : firstState;
+        const centerDistance = Math.abs(longitudinalDistance);
+        const gap = centerDistance - (followerState.length + leaderState.length) / 2;
+        const progress = PhaserMath.Clamp(
+            (gap - TRAFFIC_MIN_FOLLOW_GAP)
+                / (TRAFFIC_FOLLOW_DISTANCE - TRAFFIC_MIN_FOLLOW_GAP),
+            0,
+            1
+        );
+        const limit = gap < TRAFFIC_MIN_FOLLOW_GAP
+            ? 0
+            : PhaserMath.Linear(
+                leaderState.currentSpeed,
+                followerState.baseSpeed,
+                progress
             );
-            const limit = gap < TRAFFIC_MIN_FOLLOW_GAP
-                ? 0
-                : PhaserMath.Linear(
-                    leaderState.currentSpeed,
-                    followerState.baseSpeed,
-                    progress
+
+        this.reduceSpeedLimit(speedLimits, follower, limit);
+    }
+
+    private createIntersectionReservations ()
+    {
+        const verticalRoads = ROAD_SEGMENTS.filter((road) => road.height > road.width);
+        const horizontalRoads = ROAD_SEGMENTS.filter((road) => road.width > road.height);
+        const intersections: IntersectionReservation[] = [];
+
+        for (const verticalRoad of verticalRoads)
+        {
+            for (const horizontalRoad of horizontalRoads)
+            {
+                const left = Math.max(verticalRoad.x, horizontalRoad.x);
+                const right = Math.min(
+                    verticalRoad.x + verticalRoad.width,
+                    horizontalRoad.x + horizontalRoad.width
+                );
+                const top = Math.max(verticalRoad.y, horizontalRoad.y);
+                const bottom = Math.min(
+                    verticalRoad.y + verticalRoad.height,
+                    horizontalRoad.y + horizontalRoad.height
                 );
 
-            this.reduceSpeedLimit(speedLimits, follower, limit);
-            return;
+                if (right <= left || bottom <= top)
+                {
+                    continue;
+                }
+
+                intersections.push({
+                    id: `${verticalRoad.x}:${horizontalRoad.y}`,
+                    zone: {
+                        x: (left + right) / 2,
+                        y: (top + bottom) / 2,
+                        width: right - left + TRAFFIC_INTERSECTION_MARGIN * 2,
+                        height: bottom - top + TRAFFIC_INTERSECTION_MARGIN * 2,
+                        rotation: 0
+                    },
+                    owner: null,
+                    ownerElapsedMs: 0
+                });
+            }
         }
 
-        const firstCorridor = this.getAvoidanceCorridor(firstState);
-        const secondCorridor = this.getAvoidanceCorridor(secondState);
+        return intersections;
+    }
 
-        if (!this.orientedRectanglesOverlap(firstCorridor, secondCorridor))
+    private processIntersectionReservations (
+        delta: number,
+        speedLimits: Map<TrafficCar, number>
+    )
+    {
+        const waitingThisFrame = new Set<TrafficCar>();
+
+        for (const intersection of this.intersections)
         {
-            return;
+            const candidates = this.cars.filter((car) => this.orientedRectanglesOverlap(
+                this.getAvoidanceCorridor(car.getTrafficMotionState()),
+                intersection.zone
+            ));
+            const carsInside = candidates.filter((car) => this.isCarInsideZone(
+                car,
+                intersection.zone
+            ));
+            let timedOutOwner: TrafficCar | null = null;
+
+            if (intersection.owner)
+            {
+                intersection.ownerElapsedMs += delta;
+                const ownerInside = carsInside.includes(intersection.owner);
+                const ownerApproaching = candidates.includes(intersection.owner);
+                const ownerStopped = intersection.owner.getTrafficMotionState().currentSpeed < 1;
+
+                if (
+                    !ownerInside
+                    && (
+                        !ownerApproaching
+                        || (
+                            ownerStopped
+                            && intersection.ownerElapsedMs
+                                >= TRAFFIC_INTERSECTION_RESERVATION_TIMEOUT_MS
+                        )
+                    )
+                )
+                {
+                    timedOutOwner = intersection.owner;
+                    intersection.owner = null;
+                    intersection.ownerElapsedMs = 0;
+                }
+            }
+
+            if (
+                carsInside.length > 0
+                && (!intersection.owner || !carsInside.includes(intersection.owner))
+            )
+            {
+                intersection.owner = this.pickIntersectionCandidate(carsInside, intersection.zone);
+                intersection.ownerElapsedMs = 0;
+            }
+
+            if (!intersection.owner)
+            {
+                const eligible = candidates.filter((car) => (
+                    car !== timedOutOwner
+                    && (
+                        this.isCarInsideZone(car, intersection.zone)
+                        || this.hasClearIntersectionExit(car, intersection.zone)
+                    )
+                ));
+
+                intersection.owner = this.pickIntersectionCandidate(eligible, intersection.zone);
+                intersection.ownerElapsedMs = 0;
+            }
+
+            for (const car of candidates)
+            {
+                if (car === intersection.owner)
+                {
+                    continue;
+                }
+
+                this.reduceSpeedLimit(speedLimits, car, 0);
+                waitingThisFrame.add(car);
+            }
         }
 
-        const yieldingCar = firstState.priority < secondState.priority ? second : first;
+        for (const car of this.cars)
+        {
+            const previousWait = this.intersectionWaitMs.get(car) ?? 0;
+            this.intersectionWaitMs.set(
+                car,
+                waitingThisFrame.has(car) ? previousWait + delta : 0
+            );
+        }
+    }
 
-        this.reduceSpeedLimit(speedLimits, yieldingCar, 0);
+    private pickIntersectionCandidate (
+        candidates: TrafficCar[],
+        zone: OrientedRectangle
+    )
+    {
+        return candidates.slice().sort((first, second) => {
+            const firstInside = this.isCarInsideZone(first, zone);
+            const secondInside = this.isCarInsideZone(second, zone);
+
+            if (firstInside !== secondInside)
+            {
+                return firstInside ? -1 : 1;
+            }
+
+            const waitDifference = (this.intersectionWaitMs.get(second) ?? 0)
+                - (this.intersectionWaitMs.get(first) ?? 0);
+
+            if (waitDifference !== 0)
+            {
+                return waitDifference;
+            }
+
+            const distanceDifference = this.distanceToZone(first, zone)
+                - this.distanceToZone(second, zone);
+
+            if (distanceDifference !== 0)
+            {
+                return distanceDifference;
+            }
+
+            return first.getTrafficMotionState().priority
+                - second.getTrafficMotionState().priority;
+        })[0] ?? null;
+    }
+
+    private hasClearIntersectionExit (candidate: TrafficCar, zone: OrientedRectangle)
+    {
+        const candidateState = candidate.getTrafficMotionState();
+        const relativeX = candidateState.x - zone.x;
+        const relativeY = candidateState.y - zone.y;
+        const centerProgress = relativeX * candidateState.directionX
+            + relativeY * candidateState.directionY;
+        const zoneHalfExtent = Math.abs(candidateState.directionX) * zone.width / 2
+            + Math.abs(candidateState.directionY) * zone.height / 2;
+        const distanceToClear = zoneHalfExtent - centerProgress
+            + candidateState.length / 2
+            + TRAFFIC_MIN_FOLLOW_GAP;
+
+        return this.cars.every((other) => {
+            if (other === candidate)
+            {
+                return true;
+            }
+
+            const otherState = other.getTrafficMotionState();
+            const directionAlignment = candidateState.directionX * otherState.directionX
+                + candidateState.directionY * otherState.directionY;
+
+            if (directionAlignment <= 0.9)
+            {
+                return true;
+            }
+
+            const deltaX = otherState.x - candidateState.x;
+            const deltaY = otherState.y - candidateState.y;
+            const forwardDistance = deltaX * candidateState.directionX
+                + deltaY * candidateState.directionY;
+            const lateralDistance = Math.abs(
+                deltaX * -candidateState.directionY
+                    + deltaY * candidateState.directionX
+            );
+            const sameLane = lateralDistance
+                <= (candidateState.width + otherState.width) / 2
+                    + TRAFFIC_AVOIDANCE_MARGIN;
+
+            if (!sameLane || forwardDistance <= 0)
+            {
+                return true;
+            }
+
+            const otherRearDistance = forwardDistance - otherState.length / 2;
+
+            return otherRearDistance >= distanceToClear;
+        });
+    }
+
+    private isCarInsideZone (car: TrafficCar, zone: OrientedRectangle)
+    {
+        return this.orientedRectanglesOverlap(car.getTrafficCollisionShape(), zone);
+    }
+
+    private distanceToZone (car: TrafficCar, zone: OrientedRectangle)
+    {
+        const horizontalDistance = Math.max(Math.abs(car.x - zone.x) - zone.width / 2, 0);
+        const verticalDistance = Math.max(Math.abs(car.y - zone.y) - zone.height / 2, 0);
+
+        return Math.hypot(horizontalDistance, verticalDistance);
     }
 
     private reduceSpeedLimit (
@@ -349,6 +587,12 @@ export class TrafficSystem
 
             graphics.lineStyle(2, stopped ? 0xff3b30 : 0xffd60a, 0.55);
             this.drawOrientedRectangle(graphics, corridor);
+        }
+
+        for (const intersection of this.intersections)
+        {
+            graphics.lineStyle(3, intersection.owner ? 0x34c759 : 0x00ffff, 0.75);
+            this.drawOrientedRectangle(graphics, intersection.zone);
         }
     }
 
