@@ -10,7 +10,7 @@ O projeto é mobile-first, pensado principalmente para smartphones Android e iPh
 
 O jogo está em desenvolvimento. A versão atual contém:
 
-**Versão atual: 0.6**
+**Versão atual: 0.8**
 
 - cidade top-down com ruas, prédios, calçadas, cruzamentos, beco e área aberta;
 - motoboy com aceleração gradual, frenagem, inércia e rotação;
@@ -42,8 +42,10 @@ Desktop:
 
 Mobile:
 
-- joystick virtual: movimentar a moto;
+- toque e arraste na região inferior: abre um joystick flutuante para movimentar a moto;
 - toque: botões da interface.
+
+Quando disponível no navegador, o botão **Tela cheia** permite ampliar a área do jogo. Em smartphones usados na horizontal, a interface sugere retornar à orientação vertical.
 
 ## Progressão
 
@@ -117,6 +119,8 @@ src/
     ├── systems/             # Entregas, trânsito, perseguição e estatísticas
     └── ui/                  # HUD, joystick virtual e Game Over
 ```
+
+Os arquivos gráficos e de áudio ficam em `public/assets/`. Consulte `public/assets/README.md` para nomes, dimensões, convenções e instruções de ativação. O carregamento é centralizado na `BootScene`; enquanto uma arte estiver desabilitada ou ausente, o jogo mantém os placeholders geométricos.
 
 Responsabilidades principais:
 

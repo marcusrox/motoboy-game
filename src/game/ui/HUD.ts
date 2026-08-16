@@ -25,38 +25,40 @@ export class HUD extends GameObjects.Container
     {
         super(scene, 0, 0);
 
-        const panel = scene.add.rectangle(18, 18, 684, 205, 0x111820, 0.92).setOrigin(0);
-        this.moneyText = scene.add.text(38, 34, '', {
+        const panel = scene.add.rectangle(24, 24, 672, 160, 0x111820, 0.88)
+            .setOrigin(0)
+            .setStrokeStyle(2, 0xffffff, 0.12);
+        this.moneyText = scene.add.text(42, 36, '', {
             color: '#f4d35e',
             fontFamily: 'Arial Black',
-            fontSize: '30px'
+            fontSize: '25px'
         });
-        this.scoreText = scene.add.text(682, 38, '', {
+        this.scoreText = scene.add.text(678, 40, '', {
             color: '#ffffff',
             fontFamily: 'Arial Black',
-            fontSize: '22px'
+            fontSize: '20px'
         }).setOrigin(1, 0);
-        this.statsText = scene.add.text(38, 77, '', {
-            color: '#dce5ee',
+        this.statusText = scene.add.text(42, 76, '', {
+            color: '#ffffff',
+            fontFamily: 'Arial',
+            fontSize: '20px'
+        });
+        this.distanceText = scene.add.text(42, 108, '', {
+            color: '#b9d8ff',
             fontFamily: 'Arial',
             fontSize: '18px'
         });
-        this.statusText = scene.add.text(38, 108, '', {
-            color: '#ffffff',
-            fontFamily: 'Arial',
-            fontSize: '21px'
-        });
-        this.distanceText = scene.add.text(38, 150, '', {
-            color: '#b9d8ff',
-            fontFamily: 'Arial',
-            fontSize: '19px'
-        });
-        this.valueText = scene.add.text(682, 184, '', {
+        this.valueText = scene.add.text(678, 108, '', {
             color: '#8ee3a2',
             fontFamily: 'Arial Black',
-            fontSize: '19px'
+            fontSize: '17px'
         }).setOrigin(1, 0);
-        this.notificationText = scene.add.text(360, 270, '', {
+        this.statsText = scene.add.text(42, 143, '', {
+            color: '#dce5ee',
+            fontFamily: 'Arial',
+            fontSize: '16px'
+        });
+        this.notificationText = scene.add.text(360, 245, '', {
             align: 'center',
             backgroundColor: '#246b3d',
             color: '#ffffff',
@@ -87,10 +89,10 @@ export class HUD extends GameObjects.Container
             panel,
             this.moneyText,
             this.scoreText,
-            this.statsText,
             this.statusText,
             this.distanceText,
             this.valueText,
+            this.statsText,
             this.notificationText,
             this.dangerBorder,
             this.dangerText,

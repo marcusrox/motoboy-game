@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { GAME_VERSION } from '../config/gameVersion';
+import { MobileScreenUI } from '../ui/MobileScreenUI';
 
 export class MainMenuScene extends Scene
 {
@@ -58,5 +59,7 @@ export class MainMenuScene extends Scene
             fontFamily: 'Arial',
             fontSize: '18px'
         }).setOrigin(1, 1);
+
+        new MobileScreenUI(this);
     }
 }

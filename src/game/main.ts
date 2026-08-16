@@ -10,6 +10,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 720,
     height: 1280,
     parent: 'game-container',
+    fullscreenTarget: 'app',
     backgroundColor: '#17212b',
     scale: {
         mode: Scale.FIT,
