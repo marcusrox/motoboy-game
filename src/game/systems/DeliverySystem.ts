@@ -1,3 +1,10 @@
+import {
+    COLLISION_FREE_FINANCIAL_BONUS,
+    QUICK_DELIVERY_FINANCIAL_BONUS,
+    calculateDeliveryReward,
+    calculateQuickDeliveryTimeLimit
+} from '../config/progressionConfig';
+
 export interface DeliveryPoint
 {
     id: string;
@@ -9,12 +16,25 @@ export interface DeliveryPoint
 export interface Delivery
 {
     destination: DeliveryPoint;
+    distance: number;
     reward: number;
+    startedAtMs: number;
+    collisionsAtStart: number;
+    quickTimeLimitMs: number;
+}
+
+export interface CompletedDelivery extends Delivery
+{
+    durationMs: number;
+    quick: boolean;
+    collisionFree: boolean;
+    quickBonus: number;
+    collisionFreeBonus: number;
+    totalReward: number;
 }
 
 const PICKUP_RADIUS = 95;
 const DELIVERY_RADIUS = 85;
-const DELIVERY_REWARD = 10;
 
 export class DeliverySystem
 {
@@ -60,7 +80,7 @@ export class DeliverySystem
         return this.distanceBetween(x, y, this.currentDelivery.destination);
     }
 
-    tryStartDelivery (x: number, y: number)
+    tryStartDelivery (x: number, y: number, elapsedTimeMs: number, trafficCollisions: number)
     {
         if (
             this.currentDelivery ||
@@ -75,15 +95,21 @@ export class DeliverySystem
             Math.floor(Math.random() * this.destinations.length)
         ];
 
+        const distance = this.distanceBetween(this.restaurant.x, this.restaurant.y, destination);
+
         this.currentDelivery = {
             destination,
-            reward: DELIVERY_REWARD
+            distance,
+            reward: calculateDeliveryReward(distance),
+            startedAtMs: elapsedTimeMs,
+            collisionsAtStart: trafficCollisions,
+            quickTimeLimitMs: calculateQuickDeliveryTimeLimit(distance)
         };
 
         return this.currentDelivery;
     }
 
-    tryCompleteDelivery (x: number, y: number)
+    tryCompleteDelivery (x: number, y: number, elapsedTimeMs: number, trafficCollisions: number)
     {
         if (
             !this.currentDelivery ||
@@ -93,8 +119,23 @@ export class DeliverySystem
             return null;
         }
 
-        const completedDelivery = this.currentDelivery;
-        this.money += completedDelivery.reward;
+        const delivery = this.currentDelivery;
+        const durationMs = Math.max(0, elapsedTimeMs - delivery.startedAtMs);
+        const quick = durationMs <= delivery.quickTimeLimitMs;
+        const collisionFree = trafficCollisions === delivery.collisionsAtStart;
+        const quickBonus = quick ? QUICK_DELIVERY_FINANCIAL_BONUS : 0;
+        const collisionFreeBonus = collisionFree ? COLLISION_FREE_FINANCIAL_BONUS : 0;
+        const completedDelivery: CompletedDelivery = {
+            ...delivery,
+            durationMs,
+            quick,
+            collisionFree,
+            quickBonus,
+            collisionFreeBonus,
+            totalReward: delivery.reward + quickBonus + collisionFreeBonus
+        };
+
+        this.money += completedDelivery.totalReward;
         this.completedDeliveries += 1;
         this.currentDelivery = null;
 

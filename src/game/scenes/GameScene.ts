@@ -2,6 +2,8 @@ import { GameObjects, Input, Math as PhaserMath, Physics, Scene, Types } from 'p
 import { DeliveryMarker } from '../objects/DeliveryMarker';
 import { Motoboy } from '../objects/Motoboy';
 import { DeliveryPoint, DeliverySystem } from '../systems/DeliverySystem';
+import { GameStatsSystem } from '../systems/GameStatsSystem';
+import { ProgressPersistence } from '../systems/ProgressPersistence';
 import { PursuitSystem, SpawnPoint } from '../systems/PursuitSystem';
 import { TrafficSystem } from '../systems/TrafficSystem';
 import { GameOverOverlay } from '../ui/GameOverOverlay';
@@ -50,6 +52,8 @@ interface CityBlock
 export class GameScene extends Scene
 {
     private deliverySystem!: DeliverySystem;
+    private statsSystem!: GameStatsSystem;
+    private persistence = new ProgressPersistence();
     private pursuitSystem!: PursuitSystem;
     private trafficSystem!: TrafficSystem;
     private destinationMarkers = new Map<string, DeliveryMarker>();
@@ -79,16 +83,18 @@ export class GameScene extends Scene
         this.createDeliveryMarkers();
 
         this.motoboy = new Motoboy(this, 1200, 1500);
+        this.statsSystem = new GameStatsSystem(this.motoboy.x, this.motoboy.y);
         this.physics.add.collider(this.motoboy, this.obstacles);
         this.cameras.main.startFollow(this.motoboy, true, 0.12, 0.12);
 
-        this.hud = new HUD(this, this.deliverySystem);
+        this.hud = new HUD(this, this.deliverySystem, this.statsSystem);
         this.trafficSystem = new TrafficSystem(
             this,
             this.motoboy,
             {
                 onPlayerCollision: (moneyPenalty) => {
                     const appliedPenalty = this.deliverySystem.applyMoneyPenalty(moneyPenalty);
+                    this.statsSystem.recordTrafficCollision();
                     this.hud.showTrafficCollision(appliedPenalty);
                 }
             }
@@ -101,8 +107,14 @@ export class GameScene extends Scene
             this.cameras.main,
             PURSUIT_SPAWN_POINTS,
             {
-                onStarted: () => this.hud.refreshPursuit(this.pursuitSystem.getStatus()),
-                onEscaped: () => this.hud.showEscaped(),
+                onStarted: () => {
+                    this.statsSystem.recordPursuitStarted();
+                    this.hud.refreshPursuit(this.pursuitSystem.getStatus());
+                },
+                onEscaped: () => {
+                    this.statsSystem.recordPursuitEscaped();
+                    this.hud.showEscaped();
+                },
                 onCaught: () => this.handleGameOver()
             }
         );
@@ -155,6 +167,7 @@ export class GameScene extends Scene
 
         this.motoboy.drive(this.movement);
         this.trafficSystem.update(delta);
+        this.statsSystem.update(delta, this.motoboy.x, this.motoboy.y);
         this.updateDeliveryLoop();
         this.pursuitSystem.update(delta);
         this.hud.refreshPursuit(this.pursuitSystem.getStatus());
@@ -190,7 +203,13 @@ export class GameScene extends Scene
 
         if (!currentDelivery)
         {
-            const newDelivery = this.deliverySystem.tryStartDelivery(this.motoboy.x, this.motoboy.y);
+            const stats = this.statsSystem.getSnapshot();
+            const newDelivery = this.deliverySystem.tryStartDelivery(
+                this.motoboy.x,
+                this.motoboy.y,
+                stats.elapsedTimeMs,
+                stats.trafficCollisions
+            );
 
             if (newDelivery)
             {
@@ -202,15 +221,19 @@ export class GameScene extends Scene
         }
         else
         {
+            const stats = this.statsSystem.getSnapshot();
             const completedDelivery = this.deliverySystem.tryCompleteDelivery(
                 this.motoboy.x,
-                this.motoboy.y
+                this.motoboy.y,
+                stats.elapsedTimeMs,
+                stats.trafficCollisions
             );
 
             if (completedDelivery)
             {
                 this.destinationMarkers.get(completedDelivery.destination.id)?.setHighlighted(false);
-                this.hud.showSuccess(completedDelivery.reward);
+                this.statsSystem.recordDelivery(completedDelivery);
+                this.hud.showSuccess(completedDelivery);
             }
         }
 
@@ -230,12 +253,20 @@ export class GameScene extends Scene
         this.motoboy.drive(new PhaserMath.Vector2());
         this.physics.pause();
         this.joystick.setEnabled(false);
+        const stats = this.statsSystem.getSnapshot();
+        const money = this.deliverySystem.getMoney();
+        const recordUpdate = this.persistence.update(stats.score, stats.deliveries, money);
 
         new GameOverOverlay(
             this,
             {
-                completedDeliveries: this.deliverySystem.getCompletedDeliveries(),
-                money: this.deliverySystem.getMoney()
+                completedDeliveries: stats.deliveries,
+                money,
+                score: stats.score,
+                highScore: recordUpdate.records.highScore,
+                distanceTraveled: stats.distanceTraveled,
+                pursuitsEscaped: stats.pursuitsEscaped,
+                newHighScore: recordUpdate.newHighScore
             },
             () => this.scene.restart()
         );

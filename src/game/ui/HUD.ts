@@ -1,11 +1,14 @@
 import { GameObjects, Scene } from 'phaser';
 import { DEBUG_PURSUIT } from '../config/pursuitConfig';
-import { DeliverySystem } from '../systems/DeliverySystem';
+import { CompletedDelivery, DeliverySystem } from '../systems/DeliverySystem';
+import { GameStatsSystem } from '../systems/GameStatsSystem';
 import { PursuitStatus } from '../systems/PursuitSystem';
 
 export class HUD extends GameObjects.Container
 {
     private moneyText: GameObjects.Text;
+    private scoreText: GameObjects.Text;
+    private statsText: GameObjects.Text;
     private statusText: GameObjects.Text;
     private distanceText: GameObjects.Text;
     private valueText: GameObjects.Text;
@@ -14,27 +17,41 @@ export class HUD extends GameObjects.Container
     private dangerText: GameObjects.Text;
     private debugText: GameObjects.Text;
 
-    constructor (scene: Scene, private deliverySystem: DeliverySystem)
+    constructor (
+        scene: Scene,
+        private deliverySystem: DeliverySystem,
+        private statsSystem: GameStatsSystem
+    )
     {
         super(scene, 0, 0);
 
-        const panel = scene.add.rectangle(18, 18, 684, 150, 0x111820, 0.92).setOrigin(0);
+        const panel = scene.add.rectangle(18, 18, 684, 205, 0x111820, 0.92).setOrigin(0);
         this.moneyText = scene.add.text(38, 34, '', {
             color: '#f4d35e',
             fontFamily: 'Arial Black',
             fontSize: '30px'
         });
-        this.statusText = scene.add.text(38, 76, '', {
+        this.scoreText = scene.add.text(682, 38, '', {
+            color: '#ffffff',
+            fontFamily: 'Arial Black',
+            fontSize: '22px'
+        }).setOrigin(1, 0);
+        this.statsText = scene.add.text(38, 77, '', {
+            color: '#dce5ee',
+            fontFamily: 'Arial',
+            fontSize: '18px'
+        });
+        this.statusText = scene.add.text(38, 108, '', {
             color: '#ffffff',
             fontFamily: 'Arial',
             fontSize: '21px'
         });
-        this.distanceText = scene.add.text(38, 116, '', {
+        this.distanceText = scene.add.text(38, 150, '', {
             color: '#b9d8ff',
             fontFamily: 'Arial',
             fontSize: '19px'
         });
-        this.valueText = scene.add.text(660, 116, '', {
+        this.valueText = scene.add.text(682, 184, '', {
             color: '#8ee3a2',
             fontFamily: 'Arial Black',
             fontSize: '19px'
@@ -69,6 +86,8 @@ export class HUD extends GameObjects.Container
         this.add([
             panel,
             this.moneyText,
+            this.scoreText,
+            this.statsText,
             this.statusText,
             this.distanceText,
             this.valueText,
@@ -85,26 +104,38 @@ export class HUD extends GameObjects.Container
     refresh (distance: number | null)
     {
         const delivery = this.deliverySystem.getCurrentDelivery();
+        const stats = this.statsSystem.getSnapshot();
 
         this.moneyText.setText(`Dinheiro: ${this.formatMoney(this.deliverySystem.getMoney())}`);
+        this.scoreText.setText(`Pontos: ${stats.score}`);
+        this.statsText.setText(`Entregas: ${stats.deliveries}  •  Sequência: ${stats.deliveryStreak}`);
 
         if (!delivery)
         {
             this.statusText.setText('Sem entrega — vá ao Restaurante');
             this.distanceText.setText('Distância: --');
-            this.valueText.setText('Valor: --');
+            this.valueText.setText('Recompensa prevista: --');
             return;
         }
 
         const approximateDistance = Math.max(0, Math.round((distance ?? 0) / 10) * 10);
         this.statusText.setText(`Entrega: ${delivery.destination.name}`);
         this.distanceText.setText(`Distância aproximada: ${approximateDistance} m`);
-        this.valueText.setText(`Valor: ${this.formatMoney(delivery.reward)}`);
+        this.valueText.setText(`Recompensa prevista: ${this.formatMoney(delivery.reward)}`);
     }
 
-    showSuccess (reward: number)
+    showSuccess (delivery: CompletedDelivery)
     {
-        this.showNotification(`ENTREGA CONCLUÍDA!\n+ ${this.formatMoney(reward)}`, '#246b3d');
+        const bonuses = [
+            delivery.quick ? `Rápida +${this.formatMoney(delivery.quickBonus)}` : '',
+            delivery.collisionFree ? `Sem colisões +${this.formatMoney(delivery.collisionFreeBonus)}` : ''
+        ].filter(Boolean).join(' • ');
+        const bonusLine = bonuses ? `\n${bonuses}` : '';
+
+        this.showNotification(
+            `ENTREGA CONCLUÍDA!\n+ ${this.formatMoney(delivery.totalReward)}${bonusLine}`,
+            '#246b3d'
+        );
     }
 
     showEscaped ()

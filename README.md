@@ -1,158 +1,151 @@
-# Phaser Vite TypeScript Template
+# Tuca Motoboy
 
-This is a Phaser project template that uses Vite for bundling. It supports hot-reloading for quick development workflow, includes TypeScript support and scripts to generate production-ready builds.
+> **Piloto de fuga**
 
-**[This Template is also available as a JavaScript version.](https://github.com/phaserjs/template-vite)**
+**Tuca Motoboy** é um jogo de ação e entregas com visão top-down, ambientado em uma cidade brasileira. O jogador pilota uma moto pelas ruas, realiza entregas, evita o trânsito e tenta escapar de perseguidores para acumular dinheiro e alcançar uma pontuação cada vez maior.
 
-### Versions
+O projeto é mobile-first, pensado principalmente para smartphones Android e iPhone em orientação retrato, mas também funciona em navegadores desktop.
 
-This template has been updated for:
+## Estado atual
 
-- [Phaser 4](https://github.com/phaserjs/phaser)
-- [Vite 6.3.1](https://github.com/vitejs/vite)
-- [TypeScript 5.7.2](https://github.com/microsoft/TypeScript)
+O jogo está em desenvolvimento. A versão atual contém:
 
-![screenshot](screenshot.png)
+- cidade top-down com ruas, prédios, calçadas, cruzamentos, beco e área aberta;
+- motoboy com aceleração gradual, frenagem, inércia e rotação;
+- controles por teclado e joystick virtual touch;
+- câmera suave em um mundo maior que a tela;
+- colisões com cenário e veículos;
+- sistema de entregas com destinos aleatórios e recompensa por distância;
+- bônus por entrega rápida e sem colisões;
+- trânsito simples seguindo rotas e faixas;
+- sistema de perseguição e condição de Game Over;
+- dinheiro, pontuação, sequência de entregas e estatísticas da partida;
+- recordes locais persistidos no navegador.
 
-## Requirements
+Os elementos visuais ainda são provisórios e produzidos com formas geométricas do Phaser, sem assets externos.
 
-[Node.js](https://nodejs.org) is required to install dependencies and run scripts via `npm`.
+## Como jogar
 
-## Available Commands
+Comece a partida e dirija até o **Restaurante** para receber automaticamente uma entrega. O destino será destacado no mapa e suas informações aparecerão no HUD. Chegue ao cliente para receber a recompensa e iniciar a próxima entrega.
 
-| Command | Description |
-|---------|-------------|
-| `npm install` | Install project dependencies |
-| `npm run dev` | Launch a development web server |
-| `npm run build` | Create a production build in the `dist` folder |
-| `npm run dev-nolog` | Launch a development web server without sending anonymous data (see "About log.js" below) |
-| `npm run build-nolog` | Create a production build in the `dist` folder without sending anonymous data (see "About log.js" below) |
+Após a primeira entrega, novos pedidos podem provocar uma perseguição. Mantenha distância do perseguidor pelo tempo necessário para escapar. Uma colisão com o perseguidor encerra a partida.
 
-## Writing Code
+### Controles
 
-After cloning the repo, run `npm install` from your project directory. Then, you can start the local development server by running `npm run dev`.
+Desktop:
 
-The local development server runs on `http://localhost:8080` by default. Please see the Vite documentation if you wish to change this, or add SSL support.
+- `WASD` ou setas direcionais: movimentar a moto;
+- `Enter` ou `Espaço`: jogar novamente na tela de Game Over;
+- mouse: botões da interface.
 
-Once the server is running you can edit any of the files in the `src` folder. Vite will automatically recompile your code and then reload the browser.
+Mobile:
 
-## Template Project Structure
+- joystick virtual: movimentar a moto;
+- toque: botões da interface.
 
-We have provided a default project structure to get you started. This is as follows:
+## Progressão
 
-## Template Project Structure
+O valor-base de uma entrega considera a distância entre o restaurante e o destino. Entregas rápidas e entregas concluídas sem colisões concedem bônus financeiros.
 
-We have provided a default project structure to get you started:
+A pontuação é independente do dinheiro e considera:
 
-| Path                         | Description                                                |
-|------------------------------|------------------------------------------------------------|
-| `index.html`                 | A basic HTML page to contain the game.                     |
-| `public/assets`              | Game sprites, audio, etc. Served directly at runtime.      |
-| `public/style.css`           | Global layout styles.                                      |
-| `src/main.ts`                | Application bootstrap.                                     |
-| `src/game`                   | Folder containing the game code.                           |
-| `src/game/main.ts`           | Game entry point: configures and starts the game.          |
-| `src/game/scenes`            | Folder with all Phaser game scenes.                        | 
+- entregas concluídas;
+- rapidez da entrega;
+- sequência de entregas na mesma partida;
+- fugas bem-sucedidas;
+- penalidades por colisão com o trânsito.
 
+Os parâmetros e fórmulas podem ser ajustados em `src/game/config/progressionConfig.ts`.
 
-## Handling Assets
+Os recordes de pontuação, entregas e dinheiro são armazenados por meio de uma abstração sobre `localStorage`. Não há login, servidor ou ranking online nesta etapa.
 
-Vite supports loading assets via JavaScript module `import` statements.
+## Tecnologias
 
-This template provides support for both embedding assets and also loading them from a static folder. To embed an asset, you can import it at the top of the JavaScript file you are using it in:
+- [Phaser 4](https://phaser.io/) `4.0.0`;
+- [TypeScript](https://www.typescriptlang.org/) `5.7`;
+- [Vite](https://vite.dev/) `6.3`;
+- HTML5, Canvas e WebGL;
+- Arcade Physics do Phaser.
 
-```js
-import logoImg from './assets/logo.png'
-```
+Não são utilizados React, Vue, Angular ou outros frameworks de interface.
 
-To load static files such as audio files, videos, etc place them into the `public/assets` folder. Then you can use this path in the Loader calls within Phaser:
+## Requisitos
 
-```js
-preload ()
-{
-    //  This is an example of an imported bundled image.
-    //  Remember to import it at the top of this file
-    this.load.image('logo', logoImg);
+- [Node.js](https://nodejs.org/) em uma versão compatível com Vite 6;
+- npm.
 
-    //  This is an example of loading a static image
-    //  from the public/assets folder:
-    this.load.image('background', 'assets/bg.png');
-}
-```
-
-When you issue the `npm run build` command, all static assets are automatically copied to the `dist/assets` folder.
-
-## Deploying to Production
-
-After you run the `npm run build` command, your code will be built into a single bundle and saved to the `dist` folder, along with any other assets your project imported, or stored in the public assets folder.
-
-In order to deploy your game, you will need to upload *all* of the contents of the `dist` folder to a public facing web server.
-
-## Customizing the Template
-
-### Vite
-
-If you want to customize your build, such as adding plugin (i.e. for loading CSS or fonts), you can modify the `vite/config.*.mjs` file for cross-project changes, or you can modify and/or create new configuration files and target them in specific npm tasks inside of `package.json`. Please see the [Vite documentation](https://vitejs.dev/) for more information.
-
-## About log.js
-
-If you inspect our node scripts you will see there is a file called `log.js`. This file makes a single silent API call to a domain called `gryzor.co`. This domain is owned by Phaser Studio Inc. The domain name is a homage to one of our favorite retro games.
-
-We send the following 3 pieces of data to this API: The name of the template being used (vue, react, etc). If the build was 'dev' or 'prod' and finally the version of Phaser being used.
-
-At no point is any personal data collected or sent. We don't know about your project files, device, browser or anything else. Feel free to inspect the `log.js` file to confirm this.
-
-Why do we do this? Because being open source means we have no visible metrics about which of our templates are being used. We work hard to maintain a large and diverse set of templates for Phaser developers and this is our small anonymous way to determine if that work is actually paying off, or not. In short, it helps us ensure we're building the tools for you.
-
-However, if you don't want to send any data, you can use these commands instead:
-
-Dev:
+## Instalação e execução
 
 ```bash
-npm run dev-nolog
+npm install
+npm run dev
 ```
 
-Build:
+O servidor de desenvolvimento usa hot reload. O endereço exibido pelo Vite pode ser aberto no navegador desktop ou, quando a rede local permitir, em um smartphone conectado à mesma rede.
+
+### Build de produção
 
 ```bash
-npm run build-nolog
+npm run build
 ```
 
-Or, to disable the log entirely, simply delete the file `log.js` and remove the call to it in the `scripts` section of `package.json`:
+O resultado é gerado em `dist/`. Para publicar o jogo, disponibilize todo o conteúdo dessa pasta em um servidor web estático.
 
-Before:
+Comandos disponíveis:
 
-```json
-"scripts": {
-    "dev": "node log.js dev & dev-template-script",
-    "build": "node log.js build & build-template-script"
-},
+| Comando | Descrição |
+| --- | --- |
+| `npm run dev` | Inicia o servidor de desenvolvimento |
+| `npm run build` | Gera o build de produção |
+| `npm run dev-nolog` | Inicia o desenvolvimento sem a telemetria do template Phaser |
+| `npm run build-nolog` | Gera o build sem a telemetria do template Phaser |
+
+Os comandos padrão executam o `log.js` herdado do template oficial, que envia ao Phaser Studio apenas informações anônimas sobre o tipo de execução e a versão do Phaser. Use as variantes `-nolog` para desabilitar essa chamada.
+
+## Estrutura do projeto
+
+```text
+src/
+├── main.ts                  # Inicialização da aplicação
+└── game/
+    ├── main.ts              # Configuração do Phaser e resolução lógica
+    ├── config/              # Parâmetros de progressão, perseguição e trânsito
+    ├── objects/             # Motoboy, perseguidor, carros e marcadores
+    ├── scenes/              # BootScene, MainMenuScene e GameScene
+    ├── systems/             # Entregas, trânsito, perseguição e estatísticas
+    └── ui/                  # HUD, joystick virtual e Game Over
 ```
 
-After:
+Responsabilidades principais:
 
-```json
-"scripts": {
-    "dev": "dev-template-script",
-    "build": "build-template-script"
-},
-```
+- `BootScene`: inicia o fluxo de cenas;
+- `MainMenuScene`: apresenta o título e inicia a partida;
+- `GameScene`: compõe o mapa e integra os sistemas;
+- `objects`: objetos visuais e físicos reutilizáveis;
+- `systems`: regras de gameplay separadas da cena;
+- `ui`: elementos fixos de interface e controles touch;
+- `config`: constantes centralizadas para facilitar o balanceamento.
 
-Either of these will stop `log.js` from running. If you do decide to do this, please could you at least join our Discord and tell us which template you're using! Or send us a quick email. Either will be super-helpful, thank you.
+## Configuração do jogo
 
-## Join the Phaser Community!
+O jogo usa resolução lógica de `720 × 1280`, orientação retrato e escala responsiva `FIT`. A cidade atual possui aproximadamente `2400 × 3200` pixels.
 
-We love to see what developers like you create with Phaser! It really motivates us to keep improving. So please join our community and show-off your work 😄
+Parâmetros de balanceamento ficam em:
 
-**Visit:** The [Phaser website](https://phaser.io) and follow on [Phaser Twitter](https://twitter.com/phaser_)<br />
-**Play:** Some of the amazing games [#madewithphaser](https://twitter.com/search?q=%23madewithphaser&src=typed_query&f=live)<br />
-**Learn:** [API Docs](https://newdocs.phaser.io), [Support Forum](https://phaser.discourse.group/) and [StackOverflow](https://stackoverflow.com/questions/tagged/phaser-framework)<br />
-**Discord:** Join us on [Discord](https://discord.gg/phaser)<br />
-**Code:** 2000+ [Examples](https://labs.phaser.io)<br />
-**Read:** The [Phaser World](https://phaser.io/community/newsletter) Newsletter<br />
+- `src/game/config/progressionConfig.ts`: dinheiro, bônus e pontuação;
+- `src/game/config/pursuitConfig.ts`: chance, atraso, velocidade e fuga da perseguição;
+- `src/game/config/trafficConfig.ts`: quantidade, velocidade, rotas e colisões do trânsito.
 
-Created by [Phaser Studio](mailto:support@phaser.io). Powered by coffee, anime, pixels and love.
+## Compatibilidade
 
-The Phaser logo and characters are &copy; 2011 - 2025 Phaser Studio Inc.
+O objetivo é manter compatibilidade com navegadores modernos em:
 
-All rights reserved.
+- Android;
+- iPhone e iPad;
+- Windows, macOS e Linux.
+
+Em dispositivos móveis, recomenda-se jogar em orientação retrato e em tela cheia quando disponível.
+
+## Licença
+
+Consulte o arquivo [LICENSE](LICENSE) para os termos aplicáveis ao código-base do projeto.

@@ -24,13 +24,22 @@ export class MainMenuScene extends Scene
             road.lineBetween(centerX, y, centerX, y + 50);
         }
 
-        this.add.text(centerX, centerY - 140, 'MOTOBOY\nBRASIL', {
+        this.add.text(centerX, centerY - 185, 'TUCA\nMOTOBOY', {
             align: 'center',
             color: '#ffffff',
             fontFamily: 'Arial Black',
             fontSize: '72px',
             stroke: '#111111',
             strokeThickness: 8
+        }).setOrigin(0.5);
+
+        this.add.text(centerX, centerY - 48, 'PILOTO DE FUGA', {
+            color: '#f4d35e',
+            fontFamily: 'Arial Black',
+            fontSize: '28px',
+            letterSpacing: 3,
+            stroke: '#111111',
+            strokeThickness: 5
         }).setOrigin(0.5);
 
         const startButton = this.add.text(centerX, centerY + 140, 'TOCAR PARA COMEÇAR', {
