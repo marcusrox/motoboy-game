@@ -10,6 +10,8 @@ O projeto é mobile-first, pensado principalmente para smartphones Android e iPh
 
 O jogo está em desenvolvimento. A versão atual contém:
 
+**Versão atual: 0.6**
+
 - cidade top-down com ruas, prédios, calçadas, cruzamentos, beco e área aberta;
 - motoboy com aceleração gradual, frenagem, inércia e rotação;
 - controles por teclado e joystick virtual touch;
@@ -135,6 +137,7 @@ Parâmetros de balanceamento ficam em:
 - `src/game/config/progressionConfig.ts`: dinheiro, bônus e pontuação;
 - `src/game/config/pursuitConfig.ts`: chance, atraso, velocidade e fuga da perseguição;
 - `src/game/config/trafficConfig.ts`: quantidade, velocidade, rotas e colisões do trânsito.
+- `src/game/config/gameVersion.ts`: versão exibida na tela inicial.
 
 ## Compatibilidade
 

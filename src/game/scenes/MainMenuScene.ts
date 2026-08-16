@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { GAME_VERSION } from '../config/gameVersion';
 
 export class MainMenuScene extends Scene
 {
@@ -51,5 +52,11 @@ export class MainMenuScene extends Scene
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
         startButton.once('pointerdown', () => this.scene.start('GameScene'));
+
+        this.add.text(width - 24, height - 22, `Versão ${GAME_VERSION}`, {
+            color: '#c7d0d9',
+            fontFamily: 'Arial',
+            fontSize: '18px'
+        }).setOrigin(1, 1);
     }
 }
