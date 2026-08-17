@@ -9,7 +9,6 @@ import {
     TRAFFIC_FOLLOW_DISTANCE,
     TRAFFIC_INTERSECTION_LOOKAHEAD_MS,
     TRAFFIC_INTERSECTION_MARGIN,
-    TRAFFIC_INTERSECTION_RESERVATION_TIMEOUT_MS,
     TRAFFIC_MIN_FOLLOW_GAP,
     TRAFFIC_COLLISION_COOLDOWN_MS,
     TRAFFIC_COLLISION_KNOCKBACK,
@@ -45,20 +44,17 @@ interface OrientedRectangle
     rotation: number;
 }
 
-interface IntersectionReservation
+interface TrafficIntersection
 {
     id: string;
     zone: OrientedRectangle;
-    owner: TrafficCar | null;
-    ownerElapsedMs: number;
 }
 
 export class TrafficSystem
 {
     private vehicleGroup: Physics.Arcade.Group;
     private cars: TrafficCar[] = [];
-    private intersections: IntersectionReservation[] = [];
-    private intersectionWaitMs = new Map<TrafficCar, number>();
+    private intersections: TrafficIntersection[] = [];
     private lastCollisionByCar = new WeakMap<TrafficCar, number>();
     private debugAvoidanceGraphics?: GameObjects.Graphics;
 
@@ -74,7 +70,7 @@ export class TrafficSystem
         });
 
         this.createVehicles();
-        this.intersections = this.createIntersectionReservations();
+        this.intersections = this.createTrafficIntersections();
         scene.physics.add.collider(
             player,
             this.vehicleGroup,
@@ -113,7 +109,7 @@ export class TrafficSystem
         }
 
 
-        this.processIntersectionReservations(delta, speedLimits);
+        this.processIntersectionEntries(speedLimits);
 
         for (const car of this.cars)
         {
@@ -217,11 +213,11 @@ export class TrafficSystem
         this.reduceSpeedLimit(speedLimits, follower, limit);
     }
 
-    private createIntersectionReservations ()
+    private createTrafficIntersections ()
     {
         const verticalRoads = ROAD_SEGMENTS.filter((road) => road.height > road.width);
         const horizontalRoads = ROAD_SEGMENTS.filter((road) => road.width > road.height);
-        const intersections: IntersectionReservation[] = [];
+        const intersections: TrafficIntersection[] = [];
 
         for (const verticalRoad of verticalRoads)
         {
@@ -251,9 +247,7 @@ export class TrafficSystem
                         width: right - left + TRAFFIC_INTERSECTION_MARGIN * 2,
                         height: bottom - top + TRAFFIC_INTERSECTION_MARGIN * 2,
                         rotation: 0
-                    },
-                    owner: null,
-                    ownerElapsedMs: 0
+                    }
                 });
             }
         }
@@ -261,142 +255,112 @@ export class TrafficSystem
         return intersections;
     }
 
-    private processIntersectionReservations (
-        delta: number,
-        speedLimits: Map<TrafficCar, number>
-    )
+    private processIntersectionEntries (speedLimits: Map<TrafficCar, number>)
     {
-        const waitingThisFrame = new Set<TrafficCar>();
-
         for (const intersection of this.intersections)
         {
-            const candidates = this.cars.filter((car) => this.orientedRectanglesOverlap(
-                this.getAvoidanceCorridor(car.getTrafficMotionState()),
-                intersection.zone
-            ));
-            const carsInside = candidates.filter((car) => this.isCarInsideZone(
+            const carsInside = this.cars.filter((car) => this.isCarInsideZone(
                 car,
                 intersection.zone
             ));
-            let timedOutOwner: TrafficCar | null = null;
+            const approachingCars = this.cars.filter((car) => (
+                !carsInside.includes(car)
+                && this.isApproachingIntersection(car, intersection.zone)
+            ));
 
-            if (intersection.owner)
+            if (carsInside.length > 0)
             {
-                intersection.ownerElapsedMs += delta;
-                const ownerInside = carsInside.includes(intersection.owner);
-                const ownerApproaching = candidates.includes(intersection.owner);
-                const ownerStopped = intersection.owner.getTrafficMotionState().currentSpeed < 1;
-
-                if (
-                    !ownerInside
-                    && (
-                        !ownerApproaching
-                        || (
-                            ownerStopped
-                            && intersection.ownerElapsedMs
-                                >= TRAFFIC_INTERSECTION_RESERVATION_TIMEOUT_MS
-                        )
-                    )
-                )
+                for (const car of approachingCars)
                 {
-                    timedOutOwner = intersection.owner;
-                    intersection.owner = null;
-                    intersection.ownerElapsedMs = 0;
-                }
-            }
-
-            if (
-                carsInside.length > 0
-                && (!intersection.owner || !carsInside.includes(intersection.owner))
-            )
-            {
-                intersection.owner = this.pickIntersectionCandidate(carsInside, intersection.zone);
-                intersection.ownerElapsedMs = 0;
-            }
-
-            if (!intersection.owner)
-            {
-                const eligible = candidates.filter((car) => (
-                    car !== timedOutOwner
-                    && (
-                        this.isCarInsideZone(car, intersection.zone)
-                        || this.hasClearIntersectionExit(car, intersection.zone)
-                    )
-                ));
-
-                intersection.owner = this.pickIntersectionCandidate(eligible, intersection.zone);
-                intersection.ownerElapsedMs = 0;
-            }
-
-            for (const car of candidates)
-            {
-                if (car === intersection.owner)
-                {
-                    continue;
+                    this.reduceSpeedLimit(speedLimits, car, 0);
                 }
 
-                this.reduceSpeedLimit(speedLimits, car, 0);
-                waitingThisFrame.add(car);
+                continue;
             }
-        }
-
-        for (const car of this.cars)
-        {
-            const previousWait = this.intersectionWaitMs.get(car) ?? 0;
-            this.intersectionWaitMs.set(
-                car,
-                waitingThisFrame.has(car) ? previousWait + delta : 0
+            const selectedCar = this.pickIntersectionEntrant(
+                approachingCars.filter((car) => this.hasClearIntersectionExit(
+                    car,
+                    intersection.zone
+                )),
+                intersection.zone
             );
+
+            for (const car of approachingCars)
+            {
+                if (car !== selectedCar)
+                {
+                    this.reduceSpeedLimit(speedLimits, car, 0);
+                }
+            }
         }
     }
 
-    private pickIntersectionCandidate (
+    private pickIntersectionEntrant (
         candidates: TrafficCar[],
         zone: OrientedRectangle
     )
     {
         return candidates.slice().sort((first, second) => {
-            const firstInside = this.isCarInsideZone(first, zone);
-            const secondInside = this.isCarInsideZone(second, zone);
+            const firstState = first.getTrafficMotionState();
+            const secondState = second.getTrafficMotionState();
+            const firstArrivalTime = this.distanceToZone(first, zone) / firstState.baseSpeed;
+            const secondArrivalTime = this.distanceToZone(second, zone) / secondState.baseSpeed;
+            const arrivalDifference = firstArrivalTime - secondArrivalTime;
 
-            if (firstInside !== secondInside)
+            if (Math.abs(arrivalDifference) > 0.05)
             {
-                return firstInside ? -1 : 1;
+                return arrivalDifference;
             }
 
-            const waitDifference = (this.intersectionWaitMs.get(second) ?? 0)
-                - (this.intersectionWaitMs.get(first) ?? 0);
-
-            if (waitDifference !== 0)
-            {
-                return waitDifference;
-            }
-
-            const distanceDifference = this.distanceToZone(first, zone)
-                - this.distanceToZone(second, zone);
-
-            if (distanceDifference !== 0)
-            {
-                return distanceDifference;
-            }
-
-            return first.getTrafficMotionState().priority
-                - second.getTrafficMotionState().priority;
+            return firstState.priority - secondState.priority;
         })[0] ?? null;
+    }
+
+    private isApproachingIntersection (car: TrafficCar, zone: OrientedRectangle)
+    {
+        const state = car.getTrafficMotionState();
+        const towardCenter = (zone.x - state.x) * state.directionX
+            + (zone.y - state.y) * state.directionY;
+
+        return towardCenter > 0
+            && this.orientedRectanglesOverlap(this.getAvoidanceCorridor(state), zone);
     }
 
     private hasClearIntersectionExit (candidate: TrafficCar, zone: OrientedRectangle)
     {
         const candidateState = candidate.getTrafficMotionState();
-        const relativeX = candidateState.x - zone.x;
-        const relativeY = candidateState.y - zone.y;
-        const centerProgress = relativeX * candidateState.directionX
-            + relativeY * candidateState.directionY;
-        const zoneHalfExtent = Math.abs(candidateState.directionX) * zone.width / 2
-            + Math.abs(candidateState.directionY) * zone.height / 2;
-        const distanceToClear = zoneHalfExtent - centerProgress
-            + candidateState.length / 2
-            + TRAFFIC_MIN_FOLLOW_GAP;
+        const targetInsideZone = Math.abs(candidateState.targetX - zone.x) <= zone.width / 2
+            && Math.abs(candidateState.targetY - zone.y) <= zone.height / 2;
+        const directionX = targetInsideZone
+            ? candidateState.exitDirectionX
+            : candidateState.directionX;
+        const directionY = targetInsideZone
+            ? candidateState.exitDirectionY
+            : candidateState.directionY;
+        const normalX = -directionY;
+        const normalY = directionX;
+        const lateralOffset = targetInsideZone
+            ? 0
+            : (candidateState.x - zone.x) * normalX
+                + (candidateState.y - zone.y) * normalY;
+        const anchorX = targetInsideZone
+            ? candidateState.targetX
+            : zone.x + normalX * lateralOffset;
+        const anchorY = targetInsideZone
+            ? candidateState.targetY
+            : zone.y + normalY * lateralOffset;
+        const anchorProgress = (anchorX - zone.x) * directionX
+            + (anchorY - zone.y) * directionY;
+        const zoneHalfExtent = Math.abs(directionX) * zone.width / 2
+            + Math.abs(directionY) * zone.height / 2;
+        const distanceToBoundary = Math.max(0, zoneHalfExtent - anchorProgress);
+        const exitProbe: OrientedRectangle = {
+            x: anchorX + directionX * (distanceToBoundary + TRAFFIC_FOLLOW_DISTANCE / 2),
+            y: anchorY + directionY * (distanceToBoundary + TRAFFIC_FOLLOW_DISTANCE / 2),
+            width: candidateState.width + TRAFFIC_AVOIDANCE_MARGIN * 2,
+            height: TRAFFIC_FOLLOW_DISTANCE,
+            rotation: Math.atan2(directionY, directionX) + Math.PI / 2
+        };
 
         return this.cars.every((other) => {
             if (other === candidate)
@@ -404,35 +368,10 @@ export class TrafficSystem
                 return true;
             }
 
-            const otherState = other.getTrafficMotionState();
-            const directionAlignment = candidateState.directionX * otherState.directionX
-                + candidateState.directionY * otherState.directionY;
-
-            if (directionAlignment <= 0.9)
-            {
-                return true;
-            }
-
-            const deltaX = otherState.x - candidateState.x;
-            const deltaY = otherState.y - candidateState.y;
-            const forwardDistance = deltaX * candidateState.directionX
-                + deltaY * candidateState.directionY;
-            const lateralDistance = Math.abs(
-                deltaX * -candidateState.directionY
-                    + deltaY * candidateState.directionX
+            return !this.orientedRectanglesOverlap(
+                exitProbe,
+                other.getTrafficCollisionShape()
             );
-            const sameLane = lateralDistance
-                <= (candidateState.width + otherState.width) / 2
-                    + TRAFFIC_AVOIDANCE_MARGIN;
-
-            if (!sameLane || forwardDistance <= 0)
-            {
-                return true;
-            }
-
-            const otherRearDistance = forwardDistance - otherState.length / 2;
-
-            return otherRearDistance >= distanceToClear;
         });
     }
 
@@ -591,7 +530,12 @@ export class TrafficSystem
 
         for (const intersection of this.intersections)
         {
-            graphics.lineStyle(3, intersection.owner ? 0x34c759 : 0x00ffff, 0.75);
+            const occupied = this.cars.some((car) => this.isCarInsideZone(
+                car,
+                intersection.zone
+            ));
+
+            graphics.lineStyle(3, occupied ? 0xff3b30 : 0x34c759, 0.75);
             this.drawOrientedRectangle(graphics, intersection.zone);
         }
     }

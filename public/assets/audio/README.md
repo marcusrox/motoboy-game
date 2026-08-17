@@ -1,28 +1,29 @@
 # Áudio — Tuca Motoboy
 
-Os arquivos ainda não fazem parte do repositório. O manifesto fica em
-`src/game/config/audioManifest.ts` e permanece com `enabled: false` até que os
-dois formatos de cada item sejam adicionados.
+Os efeitos arcade são gerados proceduralmente pelo comando `npm run generate:sfx`
+e carregados pelo manifesto em `src/game/config/audioManifest.ts`. O gerador é
+determinístico: executar o comando novamente produz o mesmo pacote.
 
-Use WebM/Opus como formato principal e M4A/AAC como alternativa para Safari e
-iPhone. Exporte efeitos em mono e músicas em estéreo, preferencialmente em
-48 kHz. Normalize sem clipping e deixe margem de pico próxima de -1 dBFS.
+Os efeitos usam WAV PCM mono a 48 kHz para reprodução direta nos navegadores. As
+músicas, quando produzidas, devem usar WebM/Opus como formato principal e M4A/AAC
+como alternativa para Safari e iPhone. Normalize sem clipping e deixe margem de
+pico próxima de -1 dBFS.
 
 ## Efeitos
 
 | Arquivos | Duração recomendada | Observação |
 | --- | ---: | --- |
-| `sfx/engine-loop.webm`, `sfx/engine-loop.m4a` | 2–4 s | Loop contínuo e sem emenda |
-| `sfx/acceleration.webm`, `sfx/acceleration.m4a` | 0,8–1,5 s | Subida curta de rotação |
-| `sfx/braking.webm`, `sfx/braking.m4a` | 0,4–0,9 s | Frenagem discreta |
-| `sfx/collision.webm`, `sfx/collision.m4a` | 0,3–0,7 s | Impacto curto, sem volume agressivo |
-| `sfx/pickup.webm`, `sfx/pickup.m4a` | 0,4–0,8 s | Coleta de pedido |
-| `sfx/delivery-complete.webm`, `sfx/delivery-complete.m4a` | 0,8–1,5 s | Confirmação positiva |
-| `sfx/money.webm`, `sfx/money.m4a` | 0,3–0,7 s | Crédito de recompensa |
-| `sfx/pursuit-start.webm`, `sfx/pursuit-start.m4a` | 0,8–1,5 s | Alerta de perigo |
-| `sfx/pursuit-end.webm`, `sfx/pursuit-end.m4a` | 0,8–1,5 s | Alívio ao escapar |
-| `sfx/game-over.webm`, `sfx/game-over.m4a` | 1,5–3 s | Encerramento da partida |
-| `sfx/ui-click.webm`, `sfx/ui-click.m4a` | 0,08–0,2 s | Clique leve de interface |
+| `sfx/engine-loop.wav` | 3 s | Loop contínuo de motor arcade |
+| `sfx/acceleration.wav` | 1,1 s | Subida curta de rotação |
+| `sfx/braking.wav` | 0,68 s | Frenagem discreta |
+| `sfx/collision.wav` | 0,52 s | Impacto curto, sem volume agressivo |
+| `sfx/pickup.wav` | 0,58 s | Coleta de pedido |
+| `sfx/delivery-complete.wav` | 1,18 s | Confirmação positiva |
+| `sfx/money.wav` | 0,55 s | Crédito de recompensa |
+| `sfx/pursuit-start.wav` | 1,25 s | Alerta de perigo |
+| `sfx/pursuit-end.wav` | 1,05 s | Alívio ao escapar |
+| `sfx/game-over.wav` | 2,35 s | Encerramento da partida |
+| `sfx/ui-click.wav` | 0,12 s | Clique leve de interface |
 
 ## Música
 
@@ -32,5 +33,4 @@ iPhone. Exporte efeitos em mono e músicas em estéreo, preferencialmente em
 | `music/gameplay.webm`, `music/gameplay.m4a` | 90–180 s | Loop principal de condução |
 | `music/pursuit.webm`, `music/pursuit.m4a` | 60–120 s | Loop mais intenso para perseguições |
 
-Depois de adicionar os arquivos, altere `enabled` para `true` nas respectivas
-entradas de `AUDIO_ASSET_MANIFEST` e execute `npm run build`.
+Depois de alterar o gerador, execute `npm run generate:sfx` e `npm run build`.

@@ -81,7 +81,9 @@ export class TrafficCar extends GameObjects.Container
         let waypointsVisited = 0;
 
         while (
-            this.distanceToWaypoint <= WAYPOINT_REACH_DISTANCE + this.config.speed * delta / 1000
+            this.currentSpeed > 0
+            &&
+            this.distanceToWaypoint <= WAYPOINT_REACH_DISTANCE + this.currentSpeed * delta / 1000
             && waypointsVisited < this.config.route.waypoints.length
         )
         {
@@ -104,25 +106,17 @@ export class TrafficCar extends GameObjects.Container
             : this.config.speed;
         const targetSpeed = Math.min(routeSpeed, this.speedLimit);
 
-        if (targetSpeed <= 0)
-        {
-            this.currentSpeed = 0;
-        }
-        else
-        {
-            const acceleration = targetSpeed < this.currentSpeed
-                ? TRAFFIC_BRAKING
-                : TRAFFIC_ACCELERATION;
+        const acceleration = targetSpeed < this.currentSpeed
+            ? TRAFFIC_BRAKING
+            : TRAFFIC_ACCELERATION;
+        const maxChange = acceleration * delta / 1000;
+        const speedChange = PhaserMath.Clamp(
+            targetSpeed - this.currentSpeed,
+            -maxChange,
+            maxChange
+        );
 
-            const maxChange = acceleration * delta / 1000;
-            const speedChange = PhaserMath.Clamp(
-                targetSpeed - this.currentSpeed,
-                -maxChange,
-                maxChange
-            );
-
-            this.currentSpeed += speedChange;
-        }
+        this.currentSpeed += speedChange;
 
         const body = this.body as Physics.Arcade.Body;
         body.setVelocity(this.direction.x * this.currentSpeed, this.direction.y * this.currentSpeed);
@@ -137,6 +131,13 @@ export class TrafficCar extends GameObjects.Container
 
     getTrafficMotionState ()
     {
+        const route = this.config.route.waypoints;
+        const target = route[this.nextWaypointIndex];
+        const exitTarget = route[(this.nextWaypointIndex + 1) % route.length];
+        const exitDeltaX = exitTarget.x - target.x;
+        const exitDeltaY = exitTarget.y - target.y;
+        const exitDistance = Math.hypot(exitDeltaX, exitDeltaY) || 1;
+
         return {
             priority: this.config.priority,
             x: this.x,
@@ -146,6 +147,10 @@ export class TrafficCar extends GameObjects.Container
             rotation: this.rotation,
             directionX: this.direction.x,
             directionY: this.direction.y,
+            targetX: target.x,
+            targetY: target.y,
+            exitDirectionX: exitDeltaX / exitDistance,
+            exitDirectionY: exitDeltaY / exitDistance,
             baseSpeed: this.config.speed,
             currentSpeed: this.currentSpeed
         };
