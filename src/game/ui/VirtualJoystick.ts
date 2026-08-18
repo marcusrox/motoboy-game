@@ -1,10 +1,26 @@
 import { GameObjects, Input, Math as PhaserMath, Scene } from 'phaser';
 
 const JOYSTICK_RADIUS = 92;
+const DEAD_ZONE_RADIUS = JOYSTICK_RADIUS * 0.2;
+const DIRECTION_SECTOR_ANGLE = Math.PI / 4;
+const DIRECTION_SECTOR_HALF_ANGLE = DIRECTION_SECTOR_ANGLE / 2;
+const DIRECTION_HYSTERESIS_ANGLE = 8 * Math.PI / 180;
 const TOUCH_AREA_WIDTH = 720;
 const TOUCH_AREA_HEIGHT = 500;
 const ACTIVE_ALPHA = 0.78;
 const IDLE_ALPHA = 0.2;
+const KNOB_RETURN_TIME_MS = 35;
+const DIAGONAL_COMPONENT = Math.SQRT1_2;
+const DIGITAL_DIRECTIONS: ReadonlyArray<readonly [number, number]> = [
+    [1, 0],
+    [DIAGONAL_COMPONENT, DIAGONAL_COMPONENT],
+    [0, 1],
+    [-DIAGONAL_COMPONENT, DIAGONAL_COMPONENT],
+    [-1, 0],
+    [-DIAGONAL_COMPONENT, -DIAGONAL_COMPONENT],
+    [0, -1],
+    [DIAGONAL_COMPONENT, -DIAGONAL_COMPONENT]
+];
 
 export class VirtualJoystick extends GameObjects.Container
 {
@@ -14,8 +30,7 @@ export class VirtualJoystick extends GameObjects.Container
     private knob: GameObjects.Arc;
     private inputZone: GameObjects.Zone;
     private inputPlugin: Input.InputPlugin;
-    private targetDirection = new PhaserMath.Vector2();
-    private targetKnobPosition = new PhaserMath.Vector2();
+    private selectedDirectionIndex: number | null = null;
     private activePointerId: number | null = null;
     private enabled = true;
 
@@ -70,26 +85,23 @@ export class VirtualJoystick extends GameObjects.Container
             return;
         }
 
-        const smoothing = 1 - Math.exp(-delta / (this.activePointerId === null ? 35 : 55));
-        this.direction.lerp(this.targetDirection, smoothing);
-        this.targetKnobPosition.set(
-            this.targetDirection.x * JOYSTICK_RADIUS,
-            this.targetDirection.y * JOYSTICK_RADIUS
-        );
-        this.knob.x = PhaserMath.Linear(this.knob.x, this.targetKnobPosition.x, smoothing);
-        this.knob.y = PhaserMath.Linear(this.knob.y, this.targetKnobPosition.y, smoothing);
-
-        if (this.activePointerId === null && this.direction.lengthSq() < 0.0001)
+        if (this.activePointerId === null)
         {
-            this.direction.set(0, 0);
-            this.knob.setPosition(0, 0);
+            const smoothing = 1 - Math.exp(-delta / KNOB_RETURN_TIME_MS);
+            this.knob.x = PhaserMath.Linear(this.knob.x, 0, smoothing);
+            this.knob.y = PhaserMath.Linear(this.knob.y, 0, smoothing);
+
+            if (this.knob.x * this.knob.x + this.knob.y * this.knob.y < 0.0001)
+            {
+                this.knob.setPosition(0, 0);
+            }
         }
     }
 
     cancelInput ()
     {
         this.activePointerId = null;
-        this.targetDirection.set(0, 0);
+        this.selectedDirectionIndex = null;
         this.direction.set(0, 0);
         this.knob.setPosition(0, 0);
         this.setAlpha(IDLE_ALPHA);
@@ -122,21 +134,57 @@ export class VirtualJoystick extends GameObjects.Container
         if (pointer.id === this.activePointerId)
         {
             this.activePointerId = null;
-            this.targetDirection.set(0, 0);
+            this.selectedDirectionIndex = null;
+            this.direction.set(0, 0);
             this.setAlpha(IDLE_ALPHA);
         }
     }
 
     private updateDirection (pointer: Input.Pointer)
     {
-        this.targetDirection.set(pointer.x - this.x, pointer.y - this.y);
+        const offsetX = pointer.x - this.x;
+        const offsetY = pointer.y - this.y;
+        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
 
-        if (this.targetDirection.length() > JOYSTICK_RADIUS)
+        if (distance < DEAD_ZONE_RADIUS)
         {
-            this.targetDirection.setLength(JOYSTICK_RADIUS);
+            this.selectedDirectionIndex = null;
+            this.direction.set(0, 0);
+            this.knob.setPosition(0, 0);
+
+            return;
         }
 
-        this.targetDirection.scale(1 / JOYSTICK_RADIUS);
+        const pointerAngle = Math.atan2(offsetY, offsetX);
+        const nearestDirectionIndex = this.getNearestDirectionIndex(pointerAngle);
+
+        if (this.selectedDirectionIndex === null)
+        {
+            this.selectedDirectionIndex = nearestDirectionIndex;
+        }
+        else
+        {
+            const selectedAngle = this.selectedDirectionIndex * DIRECTION_SECTOR_ANGLE;
+            const angleDifference = Math.abs(PhaserMath.Angle.Wrap(pointerAngle - selectedAngle));
+
+            if (angleDifference > DIRECTION_SECTOR_HALF_ANGLE + DIRECTION_HYSTERESIS_ANGLE)
+            {
+                this.selectedDirectionIndex = nearestDirectionIndex;
+            }
+        }
+
+        const [directionX, directionY] = DIGITAL_DIRECTIONS[this.selectedDirectionIndex];
+        const knobDistance = Math.min(distance, JOYSTICK_RADIUS);
+
+        this.direction.set(directionX, directionY);
+        this.knob.setPosition(directionX * knobDistance, directionY * knobDistance);
+    }
+
+    private getNearestDirectionIndex (angle: number)
+    {
+        const unwrappedIndex = Math.round(angle / DIRECTION_SECTOR_ANGLE);
+
+        return (unwrappedIndex + DIGITAL_DIRECTIONS.length) % DIGITAL_DIRECTIONS.length;
     }
 
     private removeInputListeners ()

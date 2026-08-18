@@ -10,7 +10,7 @@ O projeto é mobile-first, pensado principalmente para smartphones Android e iPh
 
 O jogo está em desenvolvimento. A versão atual contém:
 
-**Versão atual: 0.9**
+**Versão atual: 0.9.1**
 
 - cidade top-down com ruas, prédios, calçadas, cruzamentos, beco e área aberta;
 - motoboy com aceleração gradual, frenagem, inércia e rotação;
@@ -44,7 +44,7 @@ Desktop:
 
 Mobile:
 
-- toque e arraste na região inferior: abre um joystick flutuante para movimentar a moto;
+- toque e arraste na região inferior: abre um joystick flutuante digital com oito direções, incluindo diagonais;
 - toque: botões da interface.
 
 Quando disponível no navegador, o botão **Tela cheia** permite ampliar a área do jogo. Em smartphones usados na horizontal, a interface sugere retornar à orientação vertical.
