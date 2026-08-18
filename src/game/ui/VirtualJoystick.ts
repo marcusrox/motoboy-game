@@ -3,8 +3,9 @@ import { GameObjects, Input, Math as PhaserMath, Scene } from 'phaser';
 const JOYSTICK_RADIUS = 92;
 const DEAD_ZONE_RADIUS = JOYSTICK_RADIUS * 0.2;
 const DIRECTION_SECTOR_ANGLE = Math.PI / 4;
-const DIRECTION_SECTOR_HALF_ANGLE = DIRECTION_SECTOR_ANGLE / 2;
-const DIRECTION_HYSTERESIS_ANGLE = 8 * Math.PI / 180;
+const CARDINAL_SECTOR_HALF_ANGLE = 30 * Math.PI / 180;
+const DIAGONAL_SECTOR_HALF_ANGLE = 15 * Math.PI / 180;
+const DIRECTION_HYSTERESIS_ANGLE = 3 * Math.PI / 180;
 const TOUCH_AREA_WIDTH = 720;
 const TOUCH_AREA_HEIGHT = 500;
 const ACTIVE_ALPHA = 0.78;
@@ -166,8 +167,14 @@ export class VirtualJoystick extends GameObjects.Container
         {
             const selectedAngle = this.selectedDirectionIndex * DIRECTION_SECTOR_ANGLE;
             const angleDifference = Math.abs(PhaserMath.Angle.Wrap(pointerAngle - selectedAngle));
+            const sectorHalfAngle = this.selectedDirectionIndex % 2 === 0
+                ? CARDINAL_SECTOR_HALF_ANGLE
+                : DIAGONAL_SECTOR_HALF_ANGLE;
 
-            if (angleDifference > DIRECTION_SECTOR_HALF_ANGLE + DIRECTION_HYSTERESIS_ANGLE)
+            if (
+                nearestDirectionIndex !== this.selectedDirectionIndex
+                && angleDifference > sectorHalfAngle + DIRECTION_HYSTERESIS_ANGLE
+            )
             {
                 this.selectedDirectionIndex = nearestDirectionIndex;
             }
@@ -182,7 +189,12 @@ export class VirtualJoystick extends GameObjects.Container
 
     private getNearestDirectionIndex (angle: number)
     {
-        const unwrappedIndex = Math.round(angle / DIRECTION_SECTOR_ANGLE);
+        const cardinalIndex = Math.round(angle / (Math.PI / 2)) * 2;
+        const cardinalAngle = cardinalIndex * DIRECTION_SECTOR_ANGLE;
+        const distanceFromCardinal = Math.abs(PhaserMath.Angle.Wrap(angle - cardinalAngle));
+        const unwrappedIndex = distanceFromCardinal <= CARDINAL_SECTOR_HALF_ANGLE
+            ? cardinalIndex
+            : Math.round((angle - DIRECTION_SECTOR_ANGLE) / (Math.PI / 2)) * 2 + 1;
 
         return (unwrappedIndex + DIGITAL_DIRECTIONS.length) % DIGITAL_DIRECTIONS.length;
     }

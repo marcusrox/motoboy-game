@@ -191,7 +191,7 @@ export class GameScene extends Scene
             this.movement.normalize();
         }
 
-        this.motoboy.drive(this.movement);
+        this.motoboy.drive(this.movement, delta);
         this.audio.updateMotor(this.motoboy.getSpeedRatio(), this.movement.lengthSq() > 0);
         this.trafficSystem.update(delta);
         this.statsSystem.update(delta, this.motoboy.x, this.motoboy.y);

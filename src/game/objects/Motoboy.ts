@@ -8,6 +8,7 @@ const MAX_SPEED = 430;
 const ROTATION_SPEED_THRESHOLD = 12;
 const TURN_ACCELERATION_MULTIPLIER = 1.25;
 const TURN_ALIGNMENT_THRESHOLD = 0.85;
+const LATERAL_GRIP_SETTLE_TIME_MS = 150;
 const VISUAL_ROTATION_SPEED = 0.16;
 
 export class Motoboy extends GameObjects.Container
@@ -40,7 +41,7 @@ export class Motoboy extends GameObjects.Container
 
         const body = this.body as Physics.Arcade.Body;
         body.setSize(42, 76);
-        body.setMaxVelocity(MAX_SPEED);
+        body.setMaxSpeed(MAX_SPEED);
         body.setCollideWorldBounds(true);
     }
 
@@ -77,13 +78,14 @@ export class Motoboy extends GameObjects.Container
         return PhaserMath.Clamp(body.velocity.length() / MAX_SPEED, 0, 1);
     }
 
-    drive (direction: PhaserMath.Vector2)
+    drive (direction: PhaserMath.Vector2, delta = 0)
     {
         const body = this.body as Physics.Arcade.Body;
         let turning = false;
 
         if (direction.lengthSq() > 0)
         {
+            this.applyLateralGrip(body, direction, delta);
             const speed = body.velocity.length();
             const alignment = speed > ROTATION_SPEED_THRESHOLD
                 ? body.velocity.dot(direction) / speed
@@ -117,6 +119,26 @@ export class Motoboy extends GameObjects.Container
 
             this.playVisualState(!moving ? 'idle' : turning ? 'turn' : 'move');
         }
+    }
+
+    private applyLateralGrip (body: Physics.Arcade.Body, direction: PhaserMath.Vector2, delta: number)
+    {
+        if (delta <= 0 || body.velocity.lengthSq() === 0)
+        {
+            return;
+        }
+
+        const directionLength = direction.length();
+        const directionX = direction.x / directionLength;
+        const directionY = direction.y / directionLength;
+        const parallelSpeed = body.velocity.x * directionX + body.velocity.y * directionY;
+        const lateralVelocityX = body.velocity.x - directionX * parallelSpeed;
+        const lateralVelocityY = body.velocity.y - directionY * parallelSpeed;
+        // Three exponential time constants remove about 95% of lateral drift in the settle time.
+        const grip = 1 - Math.exp(-3 * delta / LATERAL_GRIP_SETTLE_TIME_MS);
+
+        body.velocity.x -= lateralVelocityX * grip;
+        body.velocity.y -= lateralVelocityY * grip;
     }
 
     private createVisual (scene: Scene)
